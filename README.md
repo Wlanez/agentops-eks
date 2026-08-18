@@ -40,7 +40,8 @@ agentops-eks/
 ├── ROADMAP.md
 ├── docs/
 │   ├── requirements.md
-│   └── milestones/
+│   ├── milestones/
+│   └── instructor/
 ├── terraform/
 ├── helm/
 ├── services/
@@ -56,6 +57,17 @@ Folders are added as the corresponding milestone is implemented. Versions are pr
 ## Current target
 
 **v0.1 Foundation** — provision the AWS/EKS foundation, containerize a small FastAPI workload, deploy it with Helm, and automate build/deploy with GitHub Actions.
+
+## Instructor / teaching material
+
+This repository is also the instructor/reference implementation. Teaching notes are intentionally kept separate from the engineering milestone requirements.
+
+- [Instructor notes](docs/instructor/README.md)
+- [v0.1 Foundation teaching guide](docs/instructor/v0.1-teaching-guide.md)
+
+The instructor material captures mental models, Mermaid diagrams, teaching order, common misconceptions, verification evidence, troubleshooting lessons, video structure, and the information that can later be extracted into a separate student/template repository.
+
+The rule is: **build the real milestone first, capture what was difficult, then simplify that experience for the student.**
 
 ## Engineering principles
 
