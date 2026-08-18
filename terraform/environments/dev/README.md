@@ -100,6 +100,8 @@ terraform -chdir=terraform/environments/dev validate
 terraform -chdir=terraform/environments/dev plan -out=block-a.tfplan
 ```
 
+Invalid CIDRs and inconsistent node scaling bounds (`min <= desired <= max`) are rejected by Terraform input checks before provisioning.
+
 Review the plan. Pay particular attention to resources that create recurring cost:
 
 - Amazon EKS control plane.
@@ -183,6 +185,7 @@ This removes the cost-bearing dev infrastructure. The bootstrap state bucket is 
 Capture these while implementing rather than reconstructing them later:
 
 - [ ] `aws sts get-caller-identity`
+- [ ] `terraform fmt`, `init`, and `validate`
 - [ ] successful bootstrap plan/apply
 - [ ] successful dev `terraform plan`
 - [ ] EKS nodes `Ready`
@@ -192,6 +195,8 @@ Capture these while implementing rather than reconstructing them later:
 - [ ] one real failure/troubleshooting lesson if naturally encountered
 - [ ] observed cost drivers
 - [ ] successful `terraform destroy` for the dev environment
+
+**Do not mark Block A complete from source-code review alone.** The runtime checks above are part of the learning objective because the gap between desired configuration and observed system behavior is exactly what a platform engineer must understand.
 
 ## Stop boundary
 
