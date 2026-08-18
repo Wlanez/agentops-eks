@@ -1,0 +1,17 @@
+# Terraform working directories
+**/.terraform/*
+
+# Terraform state and plans
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+
+# Local variable/backend configuration
+terraform.tfvars
+*.auto.tfvars
+backend.hcl
+
+# OS/editor noise
+.DS_Store
