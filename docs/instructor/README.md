@@ -24,6 +24,30 @@ flowchart TD
     G --> H[Future agentops-eks-labs]
 ```
 
+## AI Platform from First Principles
+
+The durable teaching position of this project is:
+
+> **AI Platform from First Principles**
+
+Every lesson should begin with the underlying system rather than a framework or prompt:
+
+```mermaid
+flowchart TD
+    A[What problem are we solving?] --> B[How does it work without AI?]
+    B --> C[How do we automate it?]
+    C --> D[Where does AI actually help?]
+    D --> E[Where should AI NOT be used?]
+```
+
+This makes the material useful even as AI models, SDKs and agent frameworks change.
+
+The associated architecture principle is:
+
+> **Deterministic First — Inference When Necessary.**
+
+See [AI Platform from First Principles](first-principles.md) for the full architecture and teaching framework.
+
 ## Instructor repo vs student repo
 
 | Instructor/reference repo | Future student repo |
@@ -62,24 +86,29 @@ Capture the following while implementing:
 - What should a learner understand before seeing the code?
 - Which detail is useful for an engineer but unnecessary for a beginner?
 - What screenshot, terminal output, or diagram would make the explanation obvious?
+- Could this behavior be deterministic instead of AI-driven?
+- If AI is used, what ambiguity or reasoning problem justifies inference?
 
 ## Video teaching rule
 
 Prefer this sequence:
 
 1. **Problem** — why the component exists.
-2. **Mental model** — explain it visually before showing code.
-3. **Architecture** — where the component fits.
-4. **Implementation** — show only the important files/commands.
-5. **Verification** — prove it works.
-6. **Failure mode** — show one realistic mistake when useful.
-7. **Tradeoff** — explain what would change in production.
-8. **Next capability** — connect to the following milestone.
+2. **Fundamental/manual model** — how the system works without AI or high-level automation.
+3. **Mental model** — explain it visually before showing code.
+4. **Architecture** — where the component fits.
+5. **Deterministic automation** — encode the understood process.
+6. **Verification** — prove it works.
+7. **AI decision** — explain whether inference adds value here and why.
+8. **Failure mode** — show one realistic mistake when useful.
+9. **Tradeoff** — explain what would change in production.
+10. **Next capability** — connect to the following milestone.
 
 The code should support the explanation; the video should not become a narrated file-by-file walkthrough.
 
-## Current teaching guide
+## Current teaching guides
 
+- [AI Platform from First Principles](first-principles.md)
 - [v0.1 Foundation teaching guide](v0.1-teaching-guide.md)
 
 Future guides should be added only when their milestone becomes active enough that there is real experience worth teaching.
