@@ -27,6 +27,31 @@
 - Stop immediately on unexpected account ownership, unexpected existing resources, permission errors that imply the wrong identity, or any request to expose credentials.
 - Use the AWS console labels shown in the current UI; when AWS changes a label, preserve the named resource and verification outcome in this plan.
 
+## Required object and naming map
+
+Read this table before creating any identity, group, permission set, account, SSO session, or CLI profile.
+
+| Object type | Exact name | Purpose |
+|---|---|---|
+| AWS Organizations management account | existing account name | Organization, Identity Center, billing, and budgets |
+| AWS Organizations member account | `agentops-lab` | Terraform, EKS, ECR, observability, and agent workloads |
+| IAM Identity Center human user | `jorge.nunez` | The only human directory identity created by this plan |
+| IAM Identity Center management group | `OrganizationAdministrators` | Grants management-account access to its members |
+| IAM Identity Center lab group | `AgentOpsAdministrators` | Grants lab access to its members |
+| Management permission set | `OrganizationAdmin` | Administrator role in the management account |
+| Lab permission sets | `AgentOpsBootstrapAdmin`, `AgentOpsReadOnly` | Administrator and inspection roles in the lab account |
+| Local AWS CLI SSO session | `agentops-sso` | Shared browser authentication for all three CLI profiles |
+| Local AWS CLI profiles | `agentops-org-admin`, `agentops-lab-bootstrap`, `agentops-lab-readonly` | Select the intended account and permission-set role |
+
+Rules:
+
+- An **AWS account** is created under AWS Organizations. It is not an IAM Identity Center user or group.
+- A **user or group** answers *who receives access*. A **permission set** answers *what that principal can do in one assigned AWS account*.
+- Never create a user named `agentops-lab`, `OrganizationAdmin`, `AgentOpsBootstrapAdmin`, or `AgentOpsReadOnly`.
+- Never create a group named after a permission set. This plan uses only `OrganizationAdministrators` and `AgentOpsAdministrators`.
+- `Provisioned` on a permission set means its AWS-managed role exists in an account. It does not prove that `jorge.nunez` received access.
+- Stop whenever an object appears under the wrong console area or with the wrong type. Do not compensate by creating another similarly named object.
+
 ## Files Created by Execution
 
 - Create: `docs/evidence/v0.1/aws-account-bootstrap.md` — sanitized evidence and completed checklist after AWS configuration succeeds.
@@ -229,6 +254,22 @@ Select `jorge.nunez` and choose **Add users**.
 
 Expected: group membership shows `jorge.nunez`.
 
+- [ ] **Step 4: Verify the initial identity inventory**
+
+Open **IAM Identity Center → Users**.
+
+Expected at this stage: the only human directory user created by this plan is `jorge.nunez`.
+
+Then open **IAM Identity Center → Groups**.
+
+Expected at this stage:
+
+- `OrganizationAdministrators` exists and contains `jorge.nunez`;
+- `AgentOpsAdministrators` does not exist yet; it is created in Task 7;
+- no user or group is named `agentops-lab`, `OrganizationAdmin`, `AgentOpsBootstrapAdmin`, or `AgentOpsReadOnly`.
+
+Stop if an account name or permission-set name appears as a user or group. Record the unexpected object privately and use the recovery checkpoint in Task 8 Step 7 after the correct access path is verified.
+
 ### Task 4: Create and assign management-account access
 
 **Interfaces:**
@@ -321,6 +362,10 @@ Set:
 - Owner email: the distinct private business email controlled by the user
 - IAM role name: leave blank so AWS creates `OrganizationAccountAccessRole`
 
+This workflow creates an **AWS account**. Remain under **AWS Organizations**. Do not open IAM Identity Center **Users** or create a directory user named `agentops-lab`.
+
+Before choosing **Create AWS account**, confirm that the page asks for an account name and owner email—not a username, first name, last name, or password.
+
 Official reference: https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_accounts_create.html
 
 - [ ] **Step 2: Wait for account creation**
@@ -368,6 +413,8 @@ Add `jorge.nunez` to the group.
 
 Expected: group membership contains exactly the intended user.
 
+Do not create a group named `AgentOpsReadOnly` or `AgentOpsBootstrapAdmin`. Those names belong to permission sets created in the next steps, not to groups.
+
 - [ ] **Step 2: Create `AgentOpsBootstrapAdmin`**
 
 Open **Permission sets → Create permission set**.
@@ -392,34 +439,73 @@ Set:
 
 Expected: permission set shows `ReadOnlyAccess`.
 
-- [ ] **Step 4: Assign both permission sets**
+- [ ] **Step 4: Assign the lab account to the group with both permission sets**
 
-Open **AWS accounts**, select `agentops-lab`, and choose **Assign users or groups**.
+Open **IAM Identity Center → Multi-account permissions → AWS accounts**.
 
-Select group `AgentOpsAdministrators` and assign:
+In the organization tree:
 
-- `AgentOpsBootstrapAdmin`
-- `AgentOpsReadOnly`
+1. Select the checkbox immediately to the left of `agentops-lab`.
+2. Choose **Assign users or groups**.
+3. On **Step 1: Select users and groups**, open the **Groups** tab.
+4. Select exactly `AgentOpsAdministrators`.
+5. Expand the selection summary and confirm **Selected groups (1)** contains `AgentOpsAdministrators`.
+6. Do not select the **Users** tab and do not select or create a user named `agentops-lab`.
+7. Choose **Next**.
+8. Select both `AgentOpsBootstrapAdmin` and `AgentOpsReadOnly`.
+9. Choose **Next**.
+10. Review this exact relationship:
 
-Expected: both assignments reach successful provisioning status.
+```text
+AWS account: agentops-lab
+Group: AgentOpsAdministrators
+Permission sets:
+- AgentOpsBootstrapAdmin
+- AgentOpsReadOnly
+```
 
-A permission set is a template stored in IAM Identity Center. Assigning it to a user or group for an AWS account provisions an IAM role in that account whose name begins with `AWSReservedSSO_`. The CLI later requests temporary credentials for that provisioned role; a permission set that merely exists but is not assigned cannot be used.
+11. Choose **Submit** and leave the page open until AWS reports that all assignments were configured successfully.
 
-- [ ] **Step 5: Verify portal presentation and console launch**
+A green `Provisioned` status alone does not prove that the intended group received access.
 
-Open a private browser window and sign in to the AWS access portal explicitly as `jorge.nunez`. Confirm all of the following:
+Official reference: https://docs.aws.amazon.com/singlesignon/latest/userguide/assignusers.html
 
-- two AWS accounts are visible;
+- [ ] **Step 5: Verify the group-to-account assignment**
+
+Open **IAM Identity Center → Groups → AgentOpsAdministrators → AWS accounts**.
+
+Select `agentops-lab` under **AWS account access**.
+
+Expected: **Applied permission sets (2)** contains `AgentOpsBootstrapAdmin` and `AgentOpsReadOnly`.
+
+If the account is absent or only one permission set appears, return to Step 4 and add only the missing assignment. Do not create another user, group, or permission set.
+
+- [ ] **Step 6: Verify inherited access on the intended user**
+
+Open **IAM Identity Center → Users → jorge.nunez → AWS accounts**.
+
+Expected:
+
 - the management account displays `OrganizationAdmin`;
 - `agentops-lab` displays `AgentOpsBootstrapAdmin` and `AgentOpsReadOnly`;
-- `OrganizationAdmin` opens the management console;
-- both lab roles can open the member-account console.
+- no lab access depends on a directory user named `agentops-lab`.
 
-The portal is the source-of-truth checkpoint before local CLI configuration.
+This page is the decisive administrative proof that group membership produced the intended access.
 
-Expected: all three roles are visible and can launch their intended consoles.
+- [ ] **Step 7: Verify the real AWS access portal and console launch**
 
-Do not continue to Task 8 if an account or role is absent or cannot launch. A missing portal role indicates a user, group, assignment, or provisioning problem in IAM Identity Center—not an AWS CLI profile problem.
+Sign out of any existing portal session. Open a new private browser window, navigate to the private access portal URL ending in `/start`, and sign in as `jorge.nunez`.
+
+Do not use the IAM Identity Center administrative console for this test. The real page heading is **AWS access portal** and displays an **AWS accounts** count.
+
+Confirm:
+
+- **AWS accounts (2)** is displayed;
+- the management account displays `OrganizationAdmin`;
+- `agentops-lab` displays `AgentOpsBootstrapAdmin` and `AgentOpsReadOnly`;
+- all three roles open their intended consoles.
+
+Do not continue to Task 8 if the portal shows one account or a role is absent. The problem is still in the user, group, assignment, provisioning, or portal-session layer—not in the CLI.
 
 ### Task 8: Configure temporary AWS CLI SSO profiles
 
