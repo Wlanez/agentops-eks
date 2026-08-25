@@ -1,0 +1,35 @@
+# Terraform working directories
+**/.terraform/*
+
+# Terraform state
+*.tfstate
+*.tfstate.*
+
+# Terraform crash logs
+crash.log
+crash.*.log
+
+# Local variable values
+*.tfvars
+*.tfvars.json
+!*.example.tfvars
+
+# Saved binary plans
+*.tfplan
+*.plan
+
+# Local backend configuration
+*.backend.hcl
+
+# Local override files
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Terraform CLI configuration
+.terraformrc
+terraform.rc
+
+# Local operating-system metadata
+.DS_Store
