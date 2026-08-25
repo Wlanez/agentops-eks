@@ -76,7 +76,23 @@ Return to **AWS Organizations → Settings**.
 
 Expected: organization email verification is complete and **All features** remains enabled.
 
-- [ ] **Step 5: Record only non-sensitive checkpoint data**
+- [ ] **Step 5: Activate IAM role access to Billing information**
+
+While still signed in as root, open the account menu and choose **Account**.
+
+Under **IAM User and Role Access to Billing Information**, choose **Edit**, enable **Activate IAM Access**, and save.
+
+This setting does not grant billing permissions by itself. It allows IAM roles that already have suitable policies—including the later `OrganizationAdmin` role—to open the applicable Billing and Cost Management console pages. AWS requires root to change this setting, and `AdministratorAccess` cannot enable it.
+
+Enable it only in the management account for this bootstrap. The member account does not need Billing console access yet.
+
+Official reference: https://docs.aws.amazon.com/cost-management/latest/userguide/control-access-billing.html
+
+Expected: **IAM User and Role Access to Billing Information** is activated in the management account.
+
+Stop if the setting cannot be confirmed; otherwise Task 9 can later fail even when `OrganizationAdmin` has administrator permissions.
+
+- [ ] **Step 6: Record only non-sensitive checkpoint data**
 
 Record privately, outside Git:
 
@@ -96,6 +112,8 @@ Do not copy these values into the project evidence file.
 - [ ] **Step 1: Select the home region**
 
 In the AWS console region selector, choose **US West (Oregon) — us-west-2**.
+
+This selection defines the IAM Identity Center home region for this organization instance. It is separate from the region selected later by an individual workload profile, even though both are intentionally `us-west-2` in this project.
 
 - [ ] **Step 2: Enable IAM Identity Center**
 
@@ -175,6 +193,8 @@ Set:
 
 The invitation expires after seven days; complete activation during this execution.
 
+`jorge.nunez` is an IAM Identity Center directory user, not an IAM user inside either AWS account. Do not create a similarly named IAM user or access keys.
+
 Official reference: https://docs.aws.amazon.com/singlesignon/latest/userguide/addusers.html
 
 - [ ] **Step 3: Add the user to the group**
@@ -206,6 +226,8 @@ Choose **Predefined permission set**, select the AWS managed policy `Administrat
 Official reference: https://docs.aws.amazon.com/singlesignon/latest/userguide/howtocreatepermissionset.html
 
 Expected: permission-set details show `AdministratorAccess` and a one-hour session.
+
+Important authorization boundary: `AdministratorAccess` grants administrative access to all supported services inside the account where the permission set is assigned. The name and description do not technically restrict it to Organizations or Billing. Isolation comes from assigning `OrganizationAdmin` only to the management account and prohibiting project workloads there.
 
 - [ ] **Step 2: Assign the group to the management account**
 
@@ -303,6 +325,8 @@ Record the member account ID privately outside Git.
 
 Do not run password recovery or create member-account root credentials. Normal access will come from IAM Identity Center.
 
+`OrganizationAccountAccessRole` and the IAM Identity Center roles are different mechanisms. The former is created by AWS Organizations for management-account administration; it is not one of the human CLI profiles in this plan. Do not create static credentials or configure a normal working profile around it.
+
 ### Task 7: Create and assign lab permission sets
 
 **Interfaces:**
@@ -357,17 +381,74 @@ Select group `AgentOpsAdministrators` and assign:
 
 Expected: both assignments reach successful provisioning status.
 
-- [ ] **Step 5: Verify portal presentation**
+A permission set is a template stored in IAM Identity Center. Assigning it to a user or group for an AWS account provisions an IAM role in that account whose name begins with `AWSReservedSSO_`. The CLI later requests temporary credentials for that provisioned role; a permission set that merely exists but is not assigned cannot be used.
 
-Refresh the AWS access portal.
+- [ ] **Step 5: Verify portal presentation and console launch**
 
-Expected: `agentops-lab` displays both roles and the management account displays only `OrganizationAdmin`.
+Open a private browser window and sign in to the AWS access portal explicitly as `jorge.nunez`. Confirm all of the following:
+
+- two AWS accounts are visible;
+- the management account displays `OrganizationAdmin`;
+- `agentops-lab` displays `AgentOpsBootstrapAdmin` and `AgentOpsReadOnly`;
+- `OrganizationAdmin` opens the management console;
+- both lab roles can open the member-account console.
+
+The portal is the source-of-truth checkpoint before local CLI configuration.
+
+Expected: all three roles are visible and can launch their intended consoles.
+
+Do not continue to Task 8 if an account or role is absent or cannot launch. A missing portal role indicates a user, group, assignment, or provisioning problem in IAM Identity Center—not an AWS CLI profile problem.
 
 ### Task 8: Configure temporary AWS CLI SSO profiles
 
 **Interfaces:**
 - Consumes: AWS CLI v2, access portal start URL, `us-west-2`, and provisioned permission sets.
 - Produces: three named local SSO profiles with no static credentials.
+
+#### Understand `sso-session` versus `profile`
+
+The AWS CLI stores two related kinds of local configuration:
+
+- `[sso-session agentops-sso]` identifies the IAM Identity Center portal, its home region, and the browser authentication token.
+- each `[profile ...]` selects one AWS account and one assigned permission-set role.
+
+The session name is only a local label. It is not an AWS account, IAM Identity Center user, permission set, or IAM role, and its name cannot grant or deny access. This plan uses `agentops-sso` because the same authentication session serves both the management and lab accounts.
+
+A previous session name such as `agentops-lab` is technically valid but misleading. It does not itself explain a `ForbiddenException: No access`. For consistency, the completed configuration should use one shared session named `agentops-sso`.
+
+The expected structure in `~/.aws/config` is conceptually:
+
+```ini
+[sso-session agentops-sso]
+sso_start_url = <PRIVATE_ACCESS_PORTAL_URL>
+sso_region = us-west-2
+sso_registration_scopes = sso:account:access
+
+[profile agentops-org-admin]
+sso_session = agentops-sso
+sso_account_id = <MANAGEMENT_ACCOUNT_ID>
+sso_role_name = OrganizationAdmin
+region = us-west-2
+output = json
+
+[profile agentops-lab-bootstrap]
+sso_session = agentops-sso
+sso_account_id = <LAB_ACCOUNT_ID>
+sso_role_name = AgentOpsBootstrapAdmin
+region = us-west-2
+output = json
+
+[profile agentops-lab-readonly]
+sso_session = agentops-sso
+sso_account_id = <LAB_ACCOUNT_ID>
+sso_role_name = AgentOpsReadOnly
+region = us-west-2
+output = json
+```
+
+The placeholders represent private local values. Do not paste or commit the real file because it contains the access portal URL and account IDs.
+
+Official conceptual reference: https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sso-concepts.html
 
 - [ ] **Step 1: Verify AWS CLI v2**
 
@@ -436,18 +517,17 @@ Reuse `agentops-sso`. Select:
 
 Official reference: https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sso.html
 
-- [ ] **Step 5: Log in and verify all profiles**
+- [ ] **Step 5: Log in once and verify all profiles**
+
+Because all three profiles reference the same `agentops-sso` section, one successful browser login establishes the shared IAM Identity Center authentication session. Each STS command then requests temporary credentials for the account and role selected by its profile.
 
 Run:
 
 ```bash
 aws sso login --profile agentops-org-admin
+
 aws sts get-caller-identity --profile agentops-org-admin
-
-aws sso login --profile agentops-lab-bootstrap
 aws sts get-caller-identity --profile agentops-lab-bootstrap
-
-aws sso login --profile agentops-lab-readonly
 aws sts get-caller-identity --profile agentops-lab-readonly
 ```
 
@@ -457,11 +537,36 @@ Expected:
 - both lab profiles return the member account ID;
 - ARN role names correspond to the selected permission sets.
 
-Stop if any profile returns the wrong account.
+A successful `aws sso login` proves authentication to IAM Identity Center; it does not by itself prove authorization to every account and role. If STS fails with `ForbiddenException: No access`:
 
-- [ ] **Step 6: Confirm no static credentials were created**
+1. compare the requested account and role with the Task 7 portal checkpoint;
+2. if the role is missing or cannot launch in the portal, correct the Identity Center group, assignment, or provisioning;
+3. if the role launches in the portal, inspect the local profile-to-account and profile-to-role mapping;
+4. do not create access keys or treat deleting the SSO cache as the first fix.
 
-Run:
+Stop if any profile returns the wrong account or role.
+
+- [ ] **Step 6: Confirm profile mappings and no static credentials**
+
+First verify the non-sensitive session and role-name mappings:
+
+```bash
+aws configure get sso_session --profile agentops-org-admin
+aws configure get sso_role_name --profile agentops-org-admin
+
+aws configure get sso_session --profile agentops-lab-bootstrap
+aws configure get sso_role_name --profile agentops-lab-bootstrap
+
+aws configure get sso_session --profile agentops-lab-readonly
+aws configure get sso_role_name --profile agentops-lab-readonly
+```
+
+Expected:
+
+- all three session values are `agentops-sso`;
+- the role names are respectively `OrganizationAdmin`, `AgentOpsBootstrapAdmin`, and `AgentOpsReadOnly`.
+
+Then run:
 
 ```bash
 aws configure list --profile agentops-org-admin
@@ -486,6 +591,8 @@ Using `OrganizationAdmin`, open **Billing and Cost Management → Cost Explorer*
 Choose **Enable Cost Explorer** if it is not already enabled.
 
 Expected: Cost Explorer activation is acknowledged. Data can take time to populate.
+
+If the role cannot open the applicable Billing or Cost Management pages despite having `AdministratorAccess`, stop and reconfirm Task 1 Step 5. The root-only **Activate IAM Access** account setting and the role's IAM permissions are separate requirements.
 
 - [ ] **Step 2: Create the monthly budget**
 
@@ -605,6 +712,8 @@ aws elbv2 describe-load-balancers   --region us-west-2   --query 'LoadBalancers[
 
 Expected: all four workload inventories are empty.
 
+These commands verify the selected project region, `us-west-2`. Because this bootstrap starts from an empty account and fixes the project region, that is the minimum required checkpoint. If the management account has ever hosted workloads in another region, repeat the regional inventory there before claiming account-wide absence.
+
 If an unexpected resource appears, do not delete it blindly. Identify its owner, tags, and purpose first.
 
 - [ ] **Step 4: End cached SSO sessions**
@@ -633,7 +742,7 @@ Create `docs/evidence/v0.1/aws-account-bootstrap.md` with exactly this structure
 ```markdown
 # AWS Account Bootstrap Evidence
 
-**Completed:** 2026-08-24
+**Completed:** YYYY-MM-DD
 **Region:** us-west-2
 
 ## Verified controls
@@ -643,7 +752,7 @@ Create `docs/evidence/v0.1/aws-account-bootstrap.md` with exactly this structure
 - [x] IAM Identity Center uses an organization instance.
 - [x] Human access uses MFA and temporary SSO credentials.
 - [x] Root MFA remains enabled and root has no access keys.
-- [x] OrganizationAdmin is limited to management-account administration.
+- [x] OrganizationAdmin is assigned only to the management account and is not used for AgentOps workloads.
 - [x] AgentOpsBootstrapAdmin and AgentOpsReadOnly are assigned only to agentops-lab.
 - [x] The read-only role passed a negative write-permission test.
 - [x] AWS CLI profiles returned the intended account and permission-set roles.
@@ -659,6 +768,8 @@ Human users authenticate through IAM Identity Center. No long-lived AWS access k
 
 Account IDs, emails, portal URLs, role ARNs, tokens, MFA material, and credential cache contents are intentionally excluded.
 ```
+
+Replace `YYYY-MM-DD` with the actual date when the verification finishes. Do not reuse the plan creation date unless completion occurred on that date.
 
 Do not mark any item complete unless its corresponding verification passed.
 
