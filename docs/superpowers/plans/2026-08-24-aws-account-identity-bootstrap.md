@@ -600,7 +600,13 @@ Provide:
 - Default client region: `us-west-2`
 - Output format: `json`
 
-Complete browser authorization when prompted.
+When the prompt displays an older default such as **SSO session name [agentops-lab]**, type `agentops-sso` explicitly instead of pressing Enter.
+
+Complete browser authorization as `jorge.nunez`.
+
+After authorization, the wizard must enumerate both assigned AWS accounts. If it reports that only one account is available or automatically selects `OrganizationAdmin` without offering the account list, press **Ctrl+C** and return to Task 7 Step 7.
+
+Select the management account. Because only `OrganizationAdmin` is assigned there, the wizard may select that role automatically; that behavior is correct only for `agentops-org-admin`.
 
 - [ ] **Step 3: Configure the bootstrap profile**
 
@@ -610,12 +616,17 @@ Run:
 aws configure sso --profile agentops-lab-bootstrap
 ```
 
-Reuse the `agentops-sso` session when offered. Select:
+At **SSO session name**, enter `agentops-sso`. Reuse the existing session values; do not create a second session named after the lab account.
 
-- Account: `agentops-lab`
+The wizard must offer two accounts. Select `agentops-lab`.
+
+It must then offer both lab roles. Select:
+
 - Role: `AgentOpsBootstrapAdmin`
 - Default client region: `us-west-2`
 - Output format: `json`
+
+Press **Ctrl+C** if only the management account is offered, `OrganizationAdmin` is selected automatically, `AgentOpsBootstrapAdmin` is absent, or the wizard offers only `AgentOpsReadOnly`. Accepting those values would create a misleading bootstrap profile.
 
 - [ ] **Step 4: Configure the read-only profile**
 
@@ -625,12 +636,16 @@ Run:
 aws configure sso --profile agentops-lab-readonly
 ```
 
-Reuse `agentops-sso`. Select:
+At **SSO session name**, enter the same `agentops-sso` value.
+
+Select:
 
 - Account: `agentops-lab`
 - Role: `AgentOpsReadOnly`
 - Default client region: `us-west-2`
 - Output format: `json`
+
+Press **Ctrl+C** if `agentops-lab` or `AgentOpsReadOnly` is absent, or if the wizard selects `OrganizationAdmin`. Do not accept `AgentOpsBootstrapAdmin` for the read-only profile.
 
 Official reference: https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sso.html
 
@@ -638,30 +653,53 @@ Official reference: https://docs.aws.amazon.com/cli/latest/userguide/cli-configu
 
 Because all three profiles reference the same `agentops-sso` section, one successful browser login establishes the shared IAM Identity Center authentication session. Each STS command then requests temporary credentials for the account and role selected by its profile.
 
-Run:
+Clear tokens issued before the final account assignments, then authenticate once:
 
 ```bash
+aws sso logout
 aws sso login --profile agentops-org-admin
-
-aws sts get-caller-identity --profile agentops-org-admin
-aws sts get-caller-identity --profile agentops-lab-bootstrap
-aws sts get-caller-identity --profile agentops-lab-readonly
 ```
 
-Expected:
+Because all profiles reference `agentops-sso`, browser authentication is shared. Each STS request still obtains credentials for its profile's account and role.
 
-- management profile returns the management account ID;
-- both lab profiles return the member account ID;
-- ARN role names correspond to the selected permission sets.
+Run this local verification. It compares private identifiers without printing them:
 
-A successful `aws sso login` proves authentication to IAM Identity Center; it does not by itself prove authorization to every account and role. If STS fails with `ForbiddenException: No access`:
+```bash
+set -e
 
-1. compare the requested account and role with the Task 7 portal checkpoint;
-2. if the role is missing or cannot launch in the portal, correct the Identity Center group, assignment, or provisioning;
-3. if the role launches in the portal, inspect the local profile-to-account and profile-to-role mapping;
-4. do not create access keys or treat deleting the SSO cache as the first fix.
+ORG_ACCOUNT="$(aws sts get-caller-identity \
+  --profile agentops-org-admin \
+  --query Account --output text)"
+BOOT_ACCOUNT="$(aws sts get-caller-identity \
+  --profile agentops-lab-bootstrap \
+  --query Account --output text)"
+READ_ACCOUNT="$(aws sts get-caller-identity \
+  --profile agentops-lab-readonly \
+  --query Account --output text)"
 
-Stop if any profile returns the wrong account or role.
+ORG_ARN="$(aws sts get-caller-identity \
+  --profile agentops-org-admin \
+  --query Arn --output text)"
+BOOT_ARN="$(aws sts get-caller-identity \
+  --profile agentops-lab-bootstrap \
+  --query Arn --output text)"
+READ_ARN="$(aws sts get-caller-identity \
+  --profile agentops-lab-readonly \
+  --query Arn --output text)"
+
+test "$ORG_ACCOUNT" != "$BOOT_ACCOUNT"
+test "$BOOT_ACCOUNT" = "$READ_ACCOUNT"
+
+case "$ORG_ARN" in *OrganizationAdmin*) ;; *) exit 1 ;; esac
+case "$BOOT_ARN" in *AgentOpsBootstrapAdmin*) ;; *) exit 1 ;; esac
+case "$READ_ARN" in *AgentOpsReadOnly*) ;; *) exit 1 ;; esac
+
+echo "profile_verification=PASS"
+```
+
+Expected: `profile_verification=PASS`.
+
+If STS fails with `ForbiddenException: No access`, compare the profile with Task 7. If the role is absent from the portal, correct the Identity Center assignment. If it launches in the portal, inspect the local `sso_session`, account, and role mapping. Do not create access keys or paste STS output, IDs, or ARNs into chat or GitHub.
 
 - [ ] **Step 6: Confirm profile mappings and no static credentials**
 
@@ -694,6 +732,32 @@ aws configure list --profile agentops-lab-readonly
 Expected: authentication derives from SSO/session configuration, not a manually entered access key.
 
 Do not print, upload, or commit the contents of AWS credential caches.
+
+- [ ] **Step 7: Reconcile accidental Identity Center objects, if present**
+
+Run this step only when an unexpected user or group exists. Do not delete anything until Step 5 prints `profile_verification=PASS` for `jorge.nunez`.
+
+Expected final inventory:
+
+```text
+Users:
+- jorge.nunez
+
+Groups:
+- OrganizationAdministrators
+- AgentOpsAdministrators
+```
+
+For an accidental user named `agentops-lab` or a group named after a permission set:
+
+1. Confirm it is not `jorge.nunez` or one of the two intended groups.
+2. Record its current memberships and assignments privately; do not paste identifiers or screenshots.
+3. For an accidental user, choose **Disable user access** first. Do not choose **Delete user** yet.
+4. Sign out of the portal, sign back in as `jorge.nunez`, and rerun Step 5.
+5. Remove remaining assignments from the accidental object only after the correct group assignment remains visible.
+6. Deletion is irreversible. Delete an accidental user or group only after explicit human confirmation and another successful portal and CLI verification.
+
+If no accidental object exists, mark this step not applicable. Never disable or delete `jorge.nunez`, `OrganizationAdministrators`, or `AgentOpsAdministrators`.
 
 ### Task 9: Configure consolidated budget and anomaly detection
 
