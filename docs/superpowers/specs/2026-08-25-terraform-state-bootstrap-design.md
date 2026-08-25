@@ -82,7 +82,9 @@ flowchart TD
 
 ### Stage 1: Create the backend infrastructure
 
-The bootstrap root module initially runs with local state. It creates only:
+The bootstrap root module initially runs with local state. The first bootstrap commit does not contain `terraform/bootstrap/backend.tf`; therefore the initial `terraform init` uses Terraform's local backend instead of trying to contact a bucket that does not exist.
+
+It creates only:
 
 - the S3 bucket;
 - versioning;
@@ -95,7 +97,7 @@ Local bootstrap state is never committed.
 
 ### Stage 2: Migrate the bootstrap state
 
-After AWS readback verifies every bucket control, the bootstrap configuration enables the partial S3 backend and runs `terraform init -migrate-state`.
+After AWS readback verifies every bucket control, add `terraform/bootstrap/backend.tf` in a separate reviewed commit. The bootstrap configuration then enables the partial S3 backend and runs `terraform init -migrate-state`.
 
 The bootstrap state then moves to:
 
@@ -143,7 +145,7 @@ Use the AWS provider's generated-name capability:
 bucket_prefix = "agentops-eks-tfstate-"
 ```
 
-The final globally unique bucket name includes an AWS-generated suffix.
+The final globally unique bucket name includes a provider-generated suffix.
 
 This deliberately improves on embedding the AWS account ID in the globally visible bucket name:
 
@@ -275,7 +277,7 @@ docs/
 | `bootstrap/variables.tf` | Define validated region, project, and tag inputs |
 | `bootstrap/main.tf` | Create the bucket and all security controls |
 | `bootstrap/outputs.tf` | Expose the real bucket name as a sensitive output for local command composition |
-| `bootstrap/backend.tf` | Define the partial S3 backend for the migrated bootstrap state |
+| `bootstrap/backend.tf` | Define the partial S3 backend; create this file only after the bucket passes AWS readback |
 | `bootstrap/README.md` | Explain the two-stage local-to-remote migration and deliberate teardown |
 | `dev/backend.tf` | Define the separate remote state key and native S3 lockfile |
 | `dev/versions.tf` | Require a Terraform version that supports native S3 lockfiles |
