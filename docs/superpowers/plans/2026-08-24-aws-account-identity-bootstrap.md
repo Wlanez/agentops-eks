@@ -153,11 +153,33 @@ Official references:
 
 Expected: MFA is required and self-enrollment is enabled.
 
-- [ ] **Step 5: Record the access portal URL privately**
+- [ ] **Step 5: Locate, test, and record the access portal URL privately**
 
-Copy the AWS access portal URL into the user's password manager or another private location.
+While still in the management-account console and `us-west-2`, open:
 
-Do not place the URL in GitHub or the evidence document.
+**IAM Identity Center → Dashboard → Settings summary**
+
+Locate **AWS access portal URL** and copy its exact value. This value is also called the **SSO Start URL** by the AWS CLI.
+
+Open the copied URL in a private browser tab. At this stage, it is sufficient to confirm that the IAM Identity Center sign-in page loads; the `jorge.nunez` user is activated and fully tested later in Task 5.
+
+Expected:
+
+- the URL shown comes from the organization instance in `us-west-2`;
+- opening it displays the IAM Identity Center sign-in page;
+- the address normally identifies the access portal and ends with `/start`, unless a supported custom portal URL is later configured.
+
+Save the exact URL in the user's password manager or another private location under a recognizable name such as `AWS AgentOps SSO Start URL`.
+
+Do not place the real URL in GitHub, the evidence document, screenshots, terminal transcripts, or chat.
+
+Do not confuse the access portal URL with:
+
+- an AWS Management Console service URL;
+- an account-specific console link;
+- the temporary OIDC authorization URL printed by `aws sso login`, which contains `/authorize` and expires.
+
+Official reference: https://docs.aws.amazon.com/singlesignon/latest/userguide/howtosigninprocedure.html
 
 ### Task 3: Create the human identity and management group
 
@@ -464,7 +486,16 @@ If AWS CLI is missing or major version is 1, install or update AWS CLI v2 using:
 
 https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html
 
-- [ ] **Step 2: Configure the management profile**
+- [ ] **Step 2: Retrieve the SSO Start URL and configure the management profile**
+
+Retrieve the exact **AWS access portal URL** saved during Task 2 Step 5. The terms **AWS access portal URL** and **SSO Start URL** refer to the same value in this plan.
+
+If the saved value is unavailable, recover it using either approved route:
+
+1. In the management account and `us-west-2`, open **IAM Identity Center → Dashboard → Settings summary → AWS access portal URL**.
+2. From the AWS access portal, open the management account, locate `OrganizationAdmin`, choose **Access keys**, and use the **IAM Identity Center credentials** tab to read **SSO Start URL** and **SSO Region**.
+
+Do not use the temporary OIDC `/authorize` URL that the CLI displays during browser authentication.
 
 Run:
 
@@ -475,7 +506,7 @@ aws configure sso --profile agentops-org-admin
 Provide:
 
 - SSO session name: `agentops-sso`
-- SSO start URL: the private portal URL
+- SSO start URL: the exact private URL retrieved above
 - SSO region: `us-west-2`
 - Registration scopes: accept the default `sso:account:access`
 - Account: management account
