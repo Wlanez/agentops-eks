@@ -762,150 +762,271 @@ If no accidental object exists, mark this step not applicable. Never disable or 
 ### Task 9: Configure consolidated budget and anomaly detection
 
 **Interfaces:**
-- Consumes: management `OrganizationAdmin` access and private alert email.
-- Produces: USD 30 monthly budget, four budget notifications, and USD 5 anomaly subscription.
+- Consumes: verified `agentops-org-admin` access and a private alert email.
+- Produces: USD 30 consolidated monthly budget, four budget notifications, and one USD 5 anomaly subscription.
 
-- [ ] **Step 1: Enable Cost Explorer**
+Everything in this task belongs to the management account's consolidated billing context. Do not configure it from `agentops-lab`.
 
-Using `OrganizationAdmin`, open **Billing and Cost Management → Cost Explorer**.
+- [ ] **Step 1: Open Billing from the intended identity and confirm access**
 
-Choose **Enable Cost Explorer** if it is not already enabled.
+From the AWS access portal, open the management account with `OrganizationAdmin`. Confirm that role in the account menu, then open **Billing and Cost Management**.
 
-Expected: Cost Explorer activation is acknowledged. Data can take time to populate.
+Do not enter Billing from either lab role.
 
-If the role cannot open the applicable Billing or Cost Management pages despite having `AdministratorAccess`, stop and reconfirm Task 1 Step 5. The root-only **Activate IAM Access** account setting and the role's IAM permissions are separate requirements.
+Open **Cost Explorer** and choose **Enable Cost Explorer** if needed.
 
-- [ ] **Step 2: Create the monthly budget**
+Expected:
+
+- Billing opens without `AccessDenied`;
+- Cost Explorer is enabled or already active;
+- AWS may report that data needs time to populate.
+
+If Billing remains unavailable, stop and reconfirm Task 1 Step 5. Root-only **Activate IAM Access** and role permissions are separate requirements.
+
+- [ ] **Step 2: Create the organization-wide monthly budget**
 
 Open **Billing and Cost Management → Budgets → Create budget**.
 
 Choose **Customize (advanced)** and **Cost budget**.
 
-Set:
+Configure:
 
 - Budget name: `agentops-monthly-total`
-- Period: Monthly
-- Budget renewal: Recurring
-- Budgeting method: Fixed
-- Monthly amount: USD 30
-- Cost metric: Unblended costs
-- Scope: all organization accounts and services
+- Period: **Monthly**
+- Renewal: **Recurring**
+- Budgeting method: **Fixed**
+- Monthly amount: **USD 30**
+- Cost metric: **Unblended costs**
+- Scope: all organization accounts and AWS services
+
+Do not add an account, service, tag, region, or charge-type filter. A filter could hide costs the consolidated safety budget must detect.
+
+Before continuing, confirm the summary represents the whole organization rather than only `agentops-lab`.
 
 Official reference: https://docs.aws.amazon.com/cost-management/latest/userguide/create-cost-budget.html
 
-- [ ] **Step 3: Add budget notifications**
+- [ ] **Step 3: Add all four budget notifications**
 
-Add these absolute-value notifications to the same budget:
+Choose **Absolute value**, not percentage, when the UI asks for threshold type.
 
-1. Actual cost greater than USD 10 → private alert email.
-2. Actual cost greater than USD 20 → private alert email.
-3. Actual cost greater than USD 30 → private alert email.
-4. Forecasted cost greater than USD 30 → private alert email.
+| Basis | Condition | Threshold | Recipient |
+|---|---|---:|---|
+| Actual cost | Greater than | USD 10 | private alert email |
+| Actual cost | Greater than | USD 20 | private alert email |
+| Actual cost | Greater than | USD 30 | private alert email |
+| Forecasted cost | Greater than | USD 30 | private alert email |
 
-Expected: budget details show all four notifications.
+Use the same private address for all four. Do not place it in project documentation or screenshots.
 
-Note: forecast alerts may not work until AWS has approximately five weeks of usage history.
+Expected: the budget details show one budget and all four notifications.
 
-- [ ] **Step 4: Create the anomaly monitor**
+Forecast notifications may remain inactive until AWS has enough history; that delay is not a configuration failure.
+
+- [ ] **Step 4: Create the organization-wide anomaly monitor**
 
 Open **Billing and Cost Management → Cost Anomaly Detection → Cost monitors → Create monitor**.
 
-Set:
+Configure:
 
 - Monitor name: `agentops-all-services`
-- Monitor type: AWS services
-- Scope: all AWS services in the organization
+- Monitor type: **AWS services**
+- Scope: all AWS services visible to the management account
 
-Expected: monitor is active or pending initial data.
+Do not narrow the monitor to one account or service.
 
-- [ ] **Step 5: Create the anomaly subscription**
+Expected: the monitor exists and is active or awaiting initial cost data.
 
-Create an alert subscription with:
+- [ ] **Step 5: Create the anomaly alert subscription**
+
+Open **Cost Anomaly Detection → Alert subscriptions → Create subscription**.
+
+Configure:
 
 - Subscription name: `agentops-cost-anomalies`
-- Frequency: Daily summaries
-- Threshold: USD 5
+- Frequency: **Daily summaries**
+- Minimum anomaly impact threshold: **USD 5**
 - Recipient: private alert email
 - Monitor: `agentops-all-services`
 
-Email daily summary is selected to avoid adding SNS during this bootstrap. Individual immediate alerts require SNS and remain out of scope.
+Daily email summaries avoid adding SNS. Immediate individual alerts require SNS and remain out of scope.
 
 Official reference: https://docs.aws.amazon.com/cost-management/latest/userguide/getting-started-ad.html
 
-Expected: alert subscription references the monitor and USD 5 threshold.
+Expected: the subscription references `agentops-all-services` and displays USD 5.
+
+- [ ] **Step 6: Read back the complete cost-control configuration**
+
+Open `agentops-monthly-total` and confirm:
+
+- fixed monthly amount USD 30;
+- unblended costs;
+- organization-wide scope without narrowing filters;
+- actual notifications at USD 10, USD 20, and USD 30;
+- forecasted notification at USD 30.
+
+Then confirm:
+
+- monitor `agentops-all-services` exists;
+- subscription `agentops-cost-anomalies` uses daily summaries;
+- minimum impact is USD 5;
+- the private recipient is correct.
+
+Do not wait for cost data or an email. The target is saved configuration, not generated spend.
 
 ### Task 10: Verify permissions and account isolation
 
 **Interfaces:**
-- Consumes: three CLI profiles and successful budget configuration.
-- Produces: positive admin/read tests, negative write test for read-only access, and proof that management has no AgentOps workloads.
+- Consumes: the three verified CLI profiles and saved cost controls.
+- Produces: positive read tests, a negative write test, and evidence that the management account has no AgentOps workloads in `us-west-2`.
 
-- [ ] **Step 1: Verify read access**
+- [ ] **Step 1: Verify read-only authentication and inventory access**
 
 Run:
 
 ```bash
-aws s3api list-buckets --profile agentops-lab-readonly
-aws eks list-clusters --region us-west-2 --profile agentops-lab-readonly
-aws ec2 describe-vpcs --region us-west-2 --profile agentops-lab-readonly
+aws s3api list-buckets \
+  --profile agentops-lab-readonly
+
+aws eks list-clusters \
+  --region us-west-2 \
+  --profile agentops-lab-readonly
+
+aws ec2 describe-vpcs \
+  --region us-west-2 \
+  --profile agentops-lab-readonly
 ```
 
 Expected:
 
-- commands authenticate successfully;
-- EKS cluster list is empty;
-- the default VPC may exist because AWS creates default regional resources automatically.
+- all commands authenticate without `ForbiddenException` or `AccessDenied`;
+- EKS returns an empty cluster list;
+- the default VPC may exist because AWS creates default regional resources automatically;
+- a default VPC is not proof that an AgentOps workload was created.
 
-- [ ] **Step 2: Prove read-only cannot create resources**
+Stop if authentication fails. Do not count a credential or connectivity error as a successful authorization test.
+
+- [ ] **Step 2: Prove read-only access cannot create a resource**
+
+This is an intentional negative test. The request must be denied and must not leave a bucket.
 
 Run:
 
 ```bash
-AGENTOPS_ACCOUNT_ID="$(aws sts get-caller-identity --profile agentops-lab-readonly --query Account --output text)"
+AGENTOPS_ACCOUNT_ID="$(
+  aws sts get-caller-identity \
+    --profile agentops-lab-readonly \
+    --query Account \
+    --output text
+)"
+
 AGENTOPS_DENY_TEST_BUCKET="agentops-readonly-deny-${AGENTOPS_ACCOUNT_ID}"
 
-aws s3api create-bucket   --bucket "${AGENTOPS_DENY_TEST_BUCKET}"   --region us-west-2   --create-bucket-configuration LocationConstraint=us-west-2   --profile agentops-lab-readonly
+set +e
+AGENTOPS_DENY_OUTPUT="$(
+  aws s3api create-bucket \
+    --bucket "${AGENTOPS_DENY_TEST_BUCKET}" \
+    --region us-west-2 \
+    --create-bucket-configuration LocationConstraint=us-west-2 \
+    --profile agentops-lab-readonly \
+    2>&1
+)"
+AGENTOPS_DENY_STATUS=$?
+set -e
+
+if [ "${AGENTOPS_DENY_STATUS}" -eq 0 ]; then
+  aws s3api delete-bucket \
+    --bucket "${AGENTOPS_DENY_TEST_BUCKET}" \
+    --region us-west-2 \
+    --profile agentops-lab-bootstrap
+
+  echo "readonly_write_test=FAIL_RESOURCE_WAS_CREATED"
+  exit 1
+fi
+
+case "${AGENTOPS_DENY_OUTPUT}" in
+  *AccessDenied*|*UnauthorizedOperation*)
+    echo "readonly_write_test=PASS"
+    ;;
+  *)
+    echo "readonly_write_test=INCONCLUSIVE"
+    exit 1
+    ;;
+esac
+
+unset AGENTOPS_ACCOUNT_ID
+unset AGENTOPS_DENY_TEST_BUCKET
+unset AGENTOPS_DENY_OUTPUT
+unset AGENTOPS_DENY_STATUS
 ```
 
-Expected: command fails with `AccessDenied` or an equivalent authorization error.
+Expected: `readonly_write_test=PASS`.
 
-If the bucket is unexpectedly created, immediately run:
+`INCONCLUSIVE` means the command failed for a reason other than authorization. Investigate it; do not count it as least-privilege proof.
 
-```bash
-aws s3api delete-bucket   --bucket "${AGENTOPS_DENY_TEST_BUCKET}"   --region us-west-2   --profile agentops-lab-bootstrap
-```
+If a bucket is unexpectedly created, the script deletes only that exact test bucket with `agentops-lab-bootstrap` and exits. Stop and correct the read-only access path.
 
-Then stop execution and correct the `AgentOpsReadOnly` permission-set assignment before continuing.
-
-- [ ] **Step 3: Verify management-account workload absence**
+- [ ] **Step 3: Verify that the management account has no AgentOps workloads**
 
 Run:
 
 ```bash
-aws eks list-clusters   --region us-west-2   --profile agentops-org-admin
+aws eks list-clusters \
+  --region us-west-2 \
+  --profile agentops-org-admin
 
-aws ec2 describe-instances   --region us-west-2   --filters Name=instance-state-name,Values=pending,running,stopping,stopped   --query 'Reservations[].Instances[].InstanceId'   --output json   --profile agentops-org-admin
+aws ec2 describe-instances \
+  --region us-west-2 \
+  --filters Name=instance-state-name,Values=pending,running,stopping,stopped \
+  --query 'Reservations[].Instances[].InstanceId' \
+  --output json \
+  --profile agentops-org-admin
 
-aws ec2 describe-nat-gateways   --region us-west-2   --filter Name=state,Values=pending,available   --query 'NatGateways[].NatGatewayId'   --output json   --profile agentops-org-admin
+aws ec2 describe-nat-gateways \
+  --region us-west-2 \
+  --filter Name=state,Values=pending,available \
+  --query 'NatGateways[].NatGatewayId' \
+  --output json \
+  --profile agentops-org-admin
 
-aws elbv2 describe-load-balancers   --region us-west-2   --query 'LoadBalancers[].LoadBalancerArn'   --output json   --profile agentops-org-admin
+aws elbv2 describe-load-balancers \
+  --region us-west-2 \
+  --query 'LoadBalancers[].LoadBalancerArn' \
+  --output json \
+  --profile agentops-org-admin
 ```
 
-Expected: all four workload inventories are empty.
+Expected:
 
-These commands verify the selected project region, `us-west-2`. Because this bootstrap starts from an empty account and fixes the project region, that is the minimum required checkpoint. If the management account has ever hosted workloads in another region, repeat the regional inventory there before claiming account-wide absence.
+- EKS cluster list is empty;
+- EC2 instance IDs are empty;
+- NAT gateway IDs are empty;
+- load balancer ARNs are empty.
 
-If an unexpected resource appears, do not delete it blindly. Identify its owner, tags, and purpose first.
+This proves the selected project region. If the management account has hosted workloads elsewhere, repeat the inventory in those regions.
 
-- [ ] **Step 4: End cached SSO sessions**
+Do not delete unexpected resources. Identify tags, owner, region, creation time, and purpose first.
 
-After verification, run:
+- [ ] **Step 4: Confirm the verification summary**
+
+Continue only when:
+
+- Task 8 printed `profile_verification=PASS`;
+- Task 10 Step 1 authenticated successfully;
+- Task 10 Step 2 printed `readonly_write_test=PASS`;
+- all four management inventories are empty;
+- Task 9 cost controls passed their readback.
+
+Record only PASS/FAIL outcomes. Do not copy account IDs, ARNs, emails, URLs, or raw output.
+
+- [ ] **Step 5: End cached SSO sessions**
+
+Run:
 
 ```bash
 aws sso logout
 ```
 
-Expected: AWS CLI confirms cached SSO sessions are removed.
+Expected: cached Identity Center sessions are removed. The three definitions remain in `~/.aws/config`.
 
 ### Task 11: Capture sanitized evidence and commit it
 
@@ -931,6 +1052,7 @@ Create `docs/evidence/v0.1/aws-account-bootstrap.md` with exactly this structure
 - [x] AWS Organization uses all features.
 - [x] Workloads are isolated in the agentops-lab member account.
 - [x] IAM Identity Center uses an organization instance.
+- [x] The intended human identity is jorge.nunez; no accidental account-named user or permission-set-named group remains.
 - [x] Human access uses MFA and temporary SSO credentials.
 - [x] Root MFA remains enabled and root has no access keys.
 - [x] OrganizationAdmin is assigned only to the management account and is not used for AgentOps workloads.
@@ -959,12 +1081,23 @@ Do not mark any item complete unless its corresponding verification passed.
 Run from the repository root:
 
 ```bash
-rg -n   -e '[0-9]{12}'   -e 'https://[^ ]*awsapps\.com'   -e 'AKIA[0-9A-Z]{16}'   -e 'ASIA[0-9A-Z]{16}'   -e 'BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY'   docs/evidence/v0.1/aws-account-bootstrap.md
+rg -n \
+  -e '[0-9]{12}' \
+  -e 'https://[^ ]*awsapps\\.com' \
+  -e 'AKIA[0-9A-Z]{16}' \
+  -e 'ASIA[0-9A-Z]{16}' \
+  -e 'BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY' \
+  -e 'o-[a-z0-9]{10,32}' \
+  -e '[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}' \
+  -i \
+  docs/evidence/v0.1/aws-account-bootstrap.md
 ```
 
 Expected: no output.
 
-If the command finds any match, remove the sensitive value and rerun until no output is produced.
+The scan checks account IDs, portal URLs, access keys, private-key headers, organization IDs, and email addresses. It complements review; it does not prove that every possible secret format is absent.
+
+If any match appears, remove or generalize the value and rerun until there is no output.
 
 - [ ] **Step 3: Review the exact diff**
 
