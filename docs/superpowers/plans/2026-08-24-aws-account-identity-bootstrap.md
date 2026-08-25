@@ -737,7 +737,7 @@ Do not print, upload, or commit the contents of AWS credential caches.
 
 Run this step only when an unexpected user or group exists. Do not delete anything until Step 5 prints `profile_verification=PASS` for `jorge.nunez`.
 
-Expected final inventory:
+The intended final directory contains exactly these project identities:
 
 ```text
 Users:
@@ -748,16 +748,97 @@ Groups:
 - AgentOpsAdministrators
 ```
 
-For an accidental user named `agentops-lab` or a group named after a permission set:
+A permission set is not a group. Keep the `AgentOpsReadOnly` **permission set** assigned to `AgentOpsAdministrators`; remove only an accidental **group** with that same name.
 
-1. Confirm it is not `jorge.nunez` or one of the two intended groups.
-2. Record its current memberships and assignments privately; do not paste identifiers or screenshots.
-3. For an accidental user, choose **Disable user access** first. Do not choose **Delete user** yet.
-4. Sign out of the portal, sign back in as `jorge.nunez`, and rerun Step 5.
-5. Remove remaining assignments from the accidental object only after the correct group assignment remains visible.
-6. Deletion is irreversible. Delete an accidental user or group only after explicit human confirmation and another successful portal and CLI verification.
+#### 7.1 Verify the intended access path before cleanup
 
-If no accidental object exists, mark this step not applicable. Never disable or delete `jorge.nunez`, `OrganizationAdministrators`, or `AgentOpsAdministrators`.
+In **IAM Identity Center → Multi-account permissions → AWS accounts**, open each account and read the **Assigned users and groups** view.
+
+Confirm:
+
+- the management account assigns `OrganizationAdmin` to `OrganizationAdministrators`;
+- `agentops-lab` assigns both `AgentOpsBootstrapAdmin` and `AgentOpsReadOnly` to `AgentOpsAdministrators`;
+- `jorge.nunez` belongs to both intended groups;
+- no intended assignment depends on the accidental user or group.
+
+Stop if any intended role is missing. Repair the group assignment and rerun Step 5 before removing anything.
+
+#### 7.2 Inspect and disable an accidental user
+
+Open **IAM Identity Center → Users → agentops-lab**. Confirm this is the accidental directory user—not the AWS member account—and that its status is **Disabled**.
+
+Review these tabs or sections and record only names and counts privately:
+
+- **Groups**
+- **AWS accounts**
+- **Applications**
+- **MFA devices**
+- **Active sessions**
+
+If the user is still enabled, choose **Disable user access**. Do not delete it yet.
+
+For each direct AWS-account assignment shown for this user:
+
+1. Open **Multi-account permissions → AWS accounts**.
+2. Select the applicable account.
+3. Open **Assigned users and groups**.
+4. Select the accidental user—not `jorge.nunez`—and choose **Delete access** or the current equivalent removal action.
+5. Confirm that the corresponding assignment for the intended group remains present and successfully provisioned.
+
+If the accidental user belongs to any group, open that group and choose **Remove users from group** for only the accidental user. Remove application assignments as well if any exist.
+
+Official references:
+
+- https://docs.aws.amazon.com/singlesignon/latest/userguide/howtoremoveaccess.html
+- https://docs.aws.amazon.com/singlesignon/latest/userguide/removeusersfromgroups.html
+
+#### 7.3 Reverify before deleting the accidental user
+
+Sign out of the AWS access portal, sign back in as `jorge.nunez`, and confirm that the portal still offers:
+
+- management account → `OrganizationAdmin`;
+- `agentops-lab` → `AgentOpsBootstrapAdmin`;
+- `agentops-lab` → `AgentOpsReadOnly`.
+
+Run Step 5 again and require `profile_verification=PASS`.
+
+Only after explicit human confirmation, zero required assignments, and this successful verification, open **Users → agentops-lab → Delete user** and confirm deletion.
+
+Official reference: https://docs.aws.amazon.com/singlesignon/latest/userguide/deleteusers.html
+
+#### 7.4 Remove an accidental permission-set-named group
+
+Open **IAM Identity Center → Groups → AgentOpsReadOnly** and confirm it is the accidental **group**. Do not open or delete **Permission sets → AgentOpsReadOnly**.
+
+Inspect the group's users, AWS-account assignments, and application assignments. Remove each assignment first:
+
+1. For AWS-account access, use **Multi-account permissions → AWS accounts → Assigned users and groups** and remove only the accidental group.
+2. For group membership, use **Groups → AgentOpsReadOnly**, select its users, and choose **Remove users from group**.
+3. Remove application assignments if the group has any.
+
+Confirm that `jorge.nunez` remains in `AgentOpsAdministrators` and that both lab permission sets remain assigned to that intended group.
+
+Only after explicit human confirmation and zero remaining dependencies, open **Groups → AgentOpsReadOnly → Delete group** and confirm the exact group name.
+
+Official references:
+
+- https://docs.aws.amazon.com/singlesignon/latest/userguide/users-groups-provisioning.html
+- https://docs.aws.amazon.com/singlesignon/latest/userguide/deletegroups.html
+
+#### 7.5 Verify the final inventory and permissions
+
+Refresh **Users** and **Groups** and compare them with the intended inventory at the start of this step.
+
+Then:
+
+1. Sign in to the portal as `jorge.nunez`.
+2. Confirm all three intended roles are present.
+3. Rerun Step 5 and require `profile_verification=PASS`.
+4. Repeat Task 10 Step 2 and require `readonly_write_test=PASS`.
+
+Do not create Task 11 evidence until the accidental user and accidental group are absent and both final tests pass.
+
+If no accidental object exists, mark this step not applicable. Never disable or delete `jorge.nunez`, `OrganizationAdministrators`, `AgentOpsAdministrators`, or any of the three intended permission sets.
 
 ### Task 9: Configure consolidated budget and anomaly detection
 
