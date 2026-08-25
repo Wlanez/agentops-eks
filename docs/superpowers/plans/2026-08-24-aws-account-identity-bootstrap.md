@@ -1,6 +1,6 @@
 # AWS Account and Identity Bootstrap Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Configure a secure two-account AWS organization with IAM Identity Center, temporary human credentials, verified permission sets, and cost controls before AgentOps infrastructure is created.
 
@@ -66,13 +66,13 @@ Rules:
 - Consumes: secured standalone AWS account with root MFA and no root access keys.
 - Produces: AWS Organization using all features, with the current account as management account.
 
-- [ ] **Step 1: Start a private root console session**
+- [x] **Step 1: Start a private root console session**
 
 Open the AWS sign-in page in a private browser window, choose **Root user**, authenticate with the existing root email, password, and MFA.
 
 Do not save the root password in the browser and do not create access keys.
 
-- [ ] **Step 2: Reconfirm root security**
+- [x] **Step 2: Reconfirm root security**
 
 Open **IAM → Dashboard → Security recommendations** and confirm:
 
@@ -83,7 +83,7 @@ Expected: root security shows MFA protection and no active root access keys.
 
 Stop if either condition is false.
 
-- [ ] **Step 3: Create the organization**
+- [x] **Step 3: Create the organization**
 
 Open **AWS Organizations** and choose **Create an organization**.
 
@@ -93,7 +93,7 @@ Official reference: https://docs.aws.amazon.com/organizations/latest/userguide/o
 
 Expected: the Organizations account list contains one account marked **Management account** and the feature set is **All features**.
 
-- [ ] **Step 4: Complete email verification when requested**
+- [x] **Step 4: Complete email verification when requested**
 
 Open the verification email sent to the management account address and complete verification within the validity period.
 
@@ -101,7 +101,7 @@ Return to **AWS Organizations → Settings**.
 
 Expected: organization email verification is complete and **All features** remains enabled.
 
-- [ ] **Step 5: Activate IAM role access to Billing information**
+- [x] **Step 5: Activate IAM role access to Billing information**
 
 While still signed in as root, open the account menu and choose **Account**.
 
@@ -117,7 +117,7 @@ Expected: **IAM User and Role Access to Billing Information** is activated in th
 
 Stop if the setting cannot be confirmed; otherwise Task 9 can later fail even when `OrganizationAdmin` has administrator permissions.
 
-- [ ] **Step 6: Record only non-sensitive checkpoint data**
+- [x] **Step 6: Record only non-sensitive checkpoint data**
 
 Record privately, outside Git:
 
@@ -134,13 +134,13 @@ Do not copy these values into the project evidence file.
 - Consumes: AWS Organization with all features.
 - Produces: one organization instance of IAM Identity Center in `us-west-2`.
 
-- [ ] **Step 1: Select the home region**
+- [x] **Step 1: Select the home region**
 
 In the AWS console region selector, choose **US West (Oregon) — us-west-2**.
 
 This selection defines the IAM Identity Center home region for this organization instance. It is separate from the region selected later by an individual workload profile, even though both are intentionally `us-west-2` in this project.
 
-- [ ] **Step 2: Enable IAM Identity Center**
+- [x] **Step 2: Enable IAM Identity Center**
 
 Open **IAM Identity Center** and choose **Enable**.
 
@@ -152,7 +152,7 @@ Expected: IAM Identity Center shows an **Organization instance** and exposes **M
 
 Stop if the console describes the instance as **Account instance**.
 
-- [ ] **Step 3: Verify the built-in directory**
+- [x] **Step 3: Verify the built-in directory**
 
 Open **IAM Identity Center → Settings → Identity source**.
 
@@ -160,7 +160,7 @@ Expected: the identity source is **Identity Center directory**.
 
 Do not connect Google Workspace, Microsoft Entra ID, Active Directory, or another IdP in this bootstrap.
 
-- [ ] **Step 4: Configure MFA enforcement**
+- [x] **Step 4: Configure MFA enforcement**
 
 Open **Settings → Authentication → Multi-factor authentication → Configure**.
 
@@ -178,7 +178,7 @@ Official references:
 
 Expected: MFA is required and self-enrollment is enabled.
 
-- [ ] **Step 5: Locate, test, and record the access portal URL privately**
+- [x] **Step 5: Locate, test, and record the access portal URL privately**
 
 While still in the management-account console and `us-west-2`, open:
 
@@ -212,7 +212,7 @@ Official reference: https://docs.aws.amazon.com/singlesignon/latest/userguide/ho
 - Consumes: Identity Center directory.
 - Produces: `jorge.nunez` in `OrganizationAdministrators`, with invitation sent.
 
-- [ ] **Step 1: Create the group**
+- [x] **Step 1: Create the group**
 
 Open **IAM Identity Center → Groups → Create group**.
 
@@ -225,7 +225,7 @@ Choose **Create group**.
 
 Expected: the group exists with zero users.
 
-- [ ] **Step 2: Create the user**
+- [x] **Step 2: Create the user**
 
 Open **Users → Add user**.
 
@@ -244,7 +244,7 @@ The invitation expires after seven days; complete activation during this executi
 
 Official reference: https://docs.aws.amazon.com/singlesignon/latest/userguide/addusers.html
 
-- [ ] **Step 3: Add the user to the group**
+- [x] **Step 3: Add the user to the group**
 
 During user creation, select `OrganizationAdministrators`, or afterward open:
 
@@ -254,7 +254,7 @@ Select `jorge.nunez` and choose **Add users**.
 
 Expected: group membership shows `jorge.nunez`.
 
-- [ ] **Step 4: Verify the initial identity inventory**
+- [x] **Step 4: Verify the initial identity inventory**
 
 Open **IAM Identity Center → Users**.
 
@@ -276,7 +276,7 @@ Stop if an account name or permission-set name appears as a user or group. Recor
 - Consumes: management group and management account.
 - Produces: `OrganizationAdmin` permission set assigned through the group.
 
-- [ ] **Step 1: Create the permission set**
+- [x] **Step 1: Create the permission set**
 
 Open **IAM Identity Center → Multi-account permissions → Permission sets → Create permission set**.
 
@@ -292,7 +292,7 @@ Expected: permission-set details show `AdministratorAccess` and a one-hour sessi
 
 Important authorization boundary: `AdministratorAccess` grants administrative access to all supported services inside the account where the permission set is assigned. The name and description do not technically restrict it to Organizations or Billing. Isolation comes from assigning `OrganizationAdmin` only to the management account and prohibiting project workloads there.
 
-- [ ] **Step 2: Assign the group to the management account**
+- [x] **Step 2: Assign the group to the management account**
 
 Open **Multi-account permissions → AWS accounts**.
 
@@ -302,7 +302,7 @@ Official reference: https://docs.aws.amazon.com/singlesignon/latest/userguide/as
 
 Expected: the management account assignments show the group and permission set.
 
-- [ ] **Step 3: Wait for provisioning**
+- [x] **Step 3: Wait for provisioning**
 
 Wait until the assignment status is successful.
 
@@ -314,7 +314,7 @@ Do not continue while the console shows provisioning in progress or failed.
 - Consumes: user invitation and management assignment.
 - Produces: verified MFA-protected portal access as `jorge.nunez`.
 
-- [ ] **Step 1: Accept the invitation**
+- [x] **Step 1: Accept the invitation**
 
 Open the invitation email with subject similar to **Invitation to join AWS IAM Identity Center**.
 
@@ -322,7 +322,7 @@ Choose **Accept invitation**, create a unique password, and register an MFA devi
 
 Expected: the AWS access portal opens after successful activation.
 
-- [ ] **Step 2: Verify management-account access**
+- [x] **Step 2: Verify management-account access**
 
 In the access portal, select the management account and open `OrganizationAdmin`.
 
@@ -330,13 +330,13 @@ Open **AWS Organizations** and confirm the organization is visible.
 
 Expected: console access works as the Identity Center role.
 
-- [ ] **Step 3: End the root session**
+- [x] **Step 3: End the root session**
 
 Return to the root browser window, sign out, and close the private window.
 
 From this point onward, use `OrganizationAdmin`. Root is used again only for a documented root-only operation.
 
-- [ ] **Step 4: Confirm the signed-in role**
+- [x] **Step 4: Confirm the signed-in role**
 
 In the management console, open the account menu.
 
@@ -350,7 +350,7 @@ Stop if the active principal is root.
 - Consumes: `OrganizationAdmin` access and the distinct private business email.
 - Produces: active member account with default `OrganizationAccountAccessRole`.
 
-- [ ] **Step 1: Start member-account creation**
+- [x] **Step 1: Start member-account creation**
 
 Using the Identity Center `OrganizationAdmin` session, open:
 
@@ -368,7 +368,7 @@ Before choosing **Create AWS account**, confirm that the page asks for an accoun
 
 Official reference: https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_accounts_create.html
 
-- [ ] **Step 2: Wait for account creation**
+- [x] **Step 2: Wait for account creation**
 
 Monitor the request until the account status is **ACTIVE**.
 
@@ -376,7 +376,7 @@ Account creation is asynchronous. Do not submit another request if the first rem
 
 Stop and investigate if status becomes **FAILED**; common causes include an email already associated with another AWS account or account-creation quotas.
 
-- [ ] **Step 3: Verify organization topology**
+- [x] **Step 3: Verify organization topology**
 
 Open **AWS Organizations → AWS accounts**.
 
@@ -388,7 +388,7 @@ Expected:
 
 Record the member account ID privately outside Git.
 
-- [ ] **Step 4: Do not initialize member root credentials**
+- [x] **Step 4: Do not initialize member root credentials**
 
 Do not run password recovery or create member-account root credentials. Normal access will come from IAM Identity Center.
 
@@ -400,7 +400,7 @@ Do not run password recovery or create member-account root credentials. Normal a
 - Consumes: active `agentops-lab` member account and `jorge.nunez`.
 - Produces: bootstrap-admin and read-only portal roles in the member account.
 
-- [ ] **Step 1: Create the lab group**
+- [x] **Step 1: Create the lab group**
 
 Open **IAM Identity Center → Groups → Create group**.
 
@@ -415,7 +415,7 @@ Expected: group membership contains exactly the intended user.
 
 Do not create a group named `AgentOpsReadOnly` or `AgentOpsBootstrapAdmin`. Those names belong to permission sets created in the next steps, not to groups.
 
-- [ ] **Step 2: Create `AgentOpsBootstrapAdmin`**
+- [x] **Step 2: Create `AgentOpsBootstrapAdmin`**
 
 Open **Permission sets → Create permission set**.
 
@@ -427,7 +427,7 @@ Choose **Predefined permission set**, select `AdministratorAccess`, and set:
 
 Expected: permission set shows `AdministratorAccess`.
 
-- [ ] **Step 3: Create `AgentOpsReadOnly`**
+- [x] **Step 3: Create `AgentOpsReadOnly`**
 
 Create another predefined permission set using the AWS managed policy `ReadOnlyAccess`.
 
@@ -439,7 +439,7 @@ Set:
 
 Expected: permission set shows `ReadOnlyAccess`.
 
-- [ ] **Step 4: Assign the lab account to the group with both permission sets**
+- [x] **Step 4: Assign the lab account to the group with both permission sets**
 
 Open **IAM Identity Center → Multi-account permissions → AWS accounts**.
 
@@ -470,7 +470,7 @@ A green `Provisioned` status alone does not prove that the intended group receiv
 
 Official reference: https://docs.aws.amazon.com/singlesignon/latest/userguide/assignusers.html
 
-- [ ] **Step 5: Verify the group-to-account assignment**
+- [x] **Step 5: Verify the group-to-account assignment**
 
 Open **IAM Identity Center → Groups → AgentOpsAdministrators → AWS accounts**.
 
@@ -480,7 +480,7 @@ Expected: **Applied permission sets (2)** contains `AgentOpsBootstrapAdmin` and 
 
 If the account is absent or only one permission set appears, return to Step 4 and add only the missing assignment. Do not create another user, group, or permission set.
 
-- [ ] **Step 6: Verify inherited access on the intended user**
+- [x] **Step 6: Verify inherited access on the intended user**
 
 Open **IAM Identity Center → Users → jorge.nunez → AWS accounts**.
 
@@ -492,7 +492,7 @@ Expected:
 
 This page is the decisive administrative proof that group membership produced the intended access.
 
-- [ ] **Step 7: Verify the real AWS access portal and console launch**
+- [x] **Step 7: Verify the real AWS access portal and console launch**
 
 Sign out of any existing portal session. Open a new private browser window, navigate to the private access portal URL ending in `/start`, and sign in as `jorge.nunez`.
 
@@ -558,7 +558,7 @@ The placeholders represent private local values. Do not paste or commit the real
 
 Official conceptual reference: https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sso-concepts.html
 
-- [ ] **Step 1: Verify AWS CLI v2**
+- [x] **Step 1: Verify AWS CLI v2**
 
 Run:
 
@@ -572,7 +572,7 @@ If AWS CLI is missing or major version is 1, install or update AWS CLI v2 using:
 
 https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html
 
-- [ ] **Step 2: Retrieve the SSO Start URL and configure the management profile**
+- [x] **Step 2: Retrieve the SSO Start URL and configure the management profile**
 
 Retrieve the exact **AWS access portal URL** saved during Task 2 Step 5. The terms **AWS access portal URL** and **SSO Start URL** refer to the same value in this plan.
 
@@ -608,7 +608,7 @@ After authorization, the wizard must enumerate both assigned AWS accounts. If it
 
 Select the management account. Because only `OrganizationAdmin` is assigned there, the wizard may select that role automatically; that behavior is correct only for `agentops-org-admin`.
 
-- [ ] **Step 3: Configure the bootstrap profile**
+- [x] **Step 3: Configure the bootstrap profile**
 
 Run:
 
@@ -628,7 +628,7 @@ It must then offer both lab roles. Select:
 
 Press **Ctrl+C** if only the management account is offered, `OrganizationAdmin` is selected automatically, `AgentOpsBootstrapAdmin` is absent, or the wizard offers only `AgentOpsReadOnly`. Accepting those values would create a misleading bootstrap profile.
 
-- [ ] **Step 4: Configure the read-only profile**
+- [x] **Step 4: Configure the read-only profile**
 
 Run:
 
@@ -649,7 +649,7 @@ Press **Ctrl+C** if `agentops-lab` or `AgentOpsReadOnly` is absent, or if the wi
 
 Official reference: https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sso.html
 
-- [ ] **Step 5: Log in once and verify all profiles**
+- [x] **Step 5: Log in once and verify all profiles**
 
 Because all three profiles reference the same `agentops-sso` section, one successful browser login establishes the shared IAM Identity Center authentication session. Each STS command then requests temporary credentials for the account and role selected by its profile.
 
@@ -701,7 +701,7 @@ Expected: `profile_verification=PASS`.
 
 If STS fails with `ForbiddenException: No access`, compare the profile with Task 7. If the role is absent from the portal, correct the Identity Center assignment. If it launches in the portal, inspect the local `sso_session`, account, and role mapping. Do not create access keys or paste STS output, IDs, or ARNs into chat or GitHub.
 
-- [ ] **Step 6: Confirm profile mappings and no static credentials**
+- [x] **Step 6: Confirm profile mappings and no static credentials**
 
 First verify the non-sensitive session and role-name mappings:
 
@@ -733,7 +733,7 @@ Expected: authentication derives from SSO/session configuration, not a manually 
 
 Do not print, upload, or commit the contents of AWS credential caches.
 
-- [ ] **Step 7: Reconcile accidental Identity Center objects, if present**
+- [x] **Step 7: Reconcile accidental Identity Center objects, if present**
 
 Run this step only when an unexpected user or group exists. Do not delete anything until Step 5 prints `profile_verification=PASS` for `jorge.nunez`.
 
@@ -848,7 +848,7 @@ If no accidental object exists, mark this step not applicable. Never disable or 
 
 Everything in this task belongs to the management account's consolidated billing context. Do not configure it from `agentops-lab`.
 
-- [ ] **Step 1: Open Billing from the intended identity and confirm access**
+- [x] **Step 1: Open Billing from the intended identity and confirm access**
 
 From the AWS access portal, open the management account with `OrganizationAdmin`. Confirm that role in the account menu, then open **Billing and Cost Management**.
 
@@ -864,7 +864,7 @@ Expected:
 
 If Billing remains unavailable, stop and reconfirm Task 1 Step 5. Root-only **Activate IAM Access** and role permissions are separate requirements.
 
-- [ ] **Step 2: Create the organization-wide monthly budget**
+- [x] **Step 2: Create the organization-wide monthly budget**
 
 Open **Billing and Cost Management → Budgets → Create budget**.
 
@@ -886,7 +886,7 @@ Before continuing, confirm the summary represents the whole organization rather 
 
 Official reference: https://docs.aws.amazon.com/cost-management/latest/userguide/create-cost-budget.html
 
-- [ ] **Step 3: Add all four budget notifications**
+- [x] **Step 3: Add all four budget notifications**
 
 Choose **Absolute value**, not percentage, when the UI asks for threshold type.
 
@@ -903,7 +903,7 @@ Expected: the budget details show one budget and all four notifications.
 
 Forecast notifications may remain inactive until AWS has enough history; that delay is not a configuration failure.
 
-- [ ] **Step 4: Create the organization-wide anomaly monitor**
+- [x] **Step 4: Create the organization-wide anomaly monitor**
 
 Open **Billing and Cost Management → Cost Anomaly Detection → Cost monitors → Create monitor**.
 
@@ -917,7 +917,7 @@ Do not narrow the monitor to one account or service.
 
 Expected: the monitor exists and is active or awaiting initial cost data.
 
-- [ ] **Step 5: Create the anomaly alert subscription**
+- [x] **Step 5: Create the anomaly alert subscription**
 
 Open **Cost Anomaly Detection → Alert subscriptions → Create subscription**.
 
@@ -935,7 +935,7 @@ Official reference: https://docs.aws.amazon.com/cost-management/latest/userguide
 
 Expected: the subscription references `agentops-all-services` and displays USD 5.
 
-- [ ] **Step 6: Read back the complete cost-control configuration**
+- [x] **Step 6: Read back the complete cost-control configuration**
 
 Open `agentops-monthly-total` and confirm:
 
@@ -960,7 +960,7 @@ Do not wait for cost data or an email. The target is saved configuration, not ge
 - Consumes: the three verified CLI profiles and saved cost controls.
 - Produces: positive read tests, a negative write test, and evidence that the management account has no AgentOps workloads in `us-west-2`.
 
-- [ ] **Step 1: Verify read-only authentication and inventory access**
+- [x] **Step 1: Verify read-only authentication and inventory access**
 
 Run:
 
@@ -986,7 +986,7 @@ Expected:
 
 Stop if authentication fails. Do not count a credential or connectivity error as a successful authorization test.
 
-- [ ] **Step 2: Prove read-only access cannot create a resource**
+- [x] **Step 2: Prove read-only access cannot create a resource**
 
 This is an intentional negative test. The request must be denied and must not leave a bucket.
 
@@ -1046,7 +1046,7 @@ Expected: `readonly_write_test=PASS`.
 
 If a bucket is unexpectedly created, the script deletes only that exact test bucket with `agentops-lab-bootstrap` and exits. Stop and correct the read-only access path.
 
-- [ ] **Step 3: Verify that the management account has no AgentOps workloads**
+- [x] **Step 3: Verify that the management account has no AgentOps workloads**
 
 Run:
 
@@ -1087,7 +1087,7 @@ This proves the selected project region. If the management account has hosted wo
 
 Do not delete unexpected resources. Identify tags, owner, region, creation time, and purpose first.
 
-- [ ] **Step 4: Confirm the verification summary**
+- [x] **Step 4: Confirm the verification summary**
 
 Continue only when:
 
@@ -1099,7 +1099,7 @@ Continue only when:
 
 Record only PASS/FAIL outcomes. Do not copy account IDs, ARNs, emails, URLs, or raw output.
 
-- [ ] **Step 5: End cached SSO sessions**
+- [x] **Step 5: End cached SSO sessions**
 
 Run:
 
@@ -1118,7 +1118,7 @@ Expected: cached Identity Center sessions are removed. The three definitions rem
 - Consumes: verified outcomes from Tasks 1–10.
 - Produces: public-safe evidence that allows a reviewer to validate the architecture without exposing identifiers.
 
-- [ ] **Step 1: Create the evidence document**
+- [x] **Step 1: Create the evidence document**
 
 Create `docs/evidence/v0.1/aws-account-bootstrap.md` with exactly this structure:
 
@@ -1157,7 +1157,7 @@ Replace `YYYY-MM-DD` with the actual date when the verification finishes. Do not
 
 Do not mark any item complete unless its corresponding verification passed.
 
-- [ ] **Step 2: Scan the evidence for sensitive values**
+- [x] **Step 2: Scan the evidence for sensitive values**
 
 Run from the repository root:
 
@@ -1180,7 +1180,7 @@ The scan checks account IDs, portal URLs, access keys, private-key headers, orga
 
 If any match appears, remove or generalize the value and rerun until there is no output.
 
-- [ ] **Step 3: Review the exact diff**
+- [x] **Step 3: Review the exact diff**
 
 Run:
 
@@ -1191,7 +1191,7 @@ git status --short
 
 Expected: only the intended evidence file is new or modified for this task.
 
-- [ ] **Step 4: Commit the evidence**
+- [x] **Step 4: Commit the evidence**
 
 Run:
 
@@ -1202,7 +1202,7 @@ git commit -m "docs: record AWS account bootstrap evidence"
 
 Expected: commit succeeds and contains no sensitive data.
 
-- [ ] **Step 5: Declare the implementation boundary complete**
+- [x] **Step 5: Declare the implementation boundary complete**
 
 The AWS account and identity bootstrap is complete only when every task in this plan is checked.
 
