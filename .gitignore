@@ -33,3 +33,6 @@ terraform.rc
 
 # Local operating-system metadata
 .DS_Store
+
+# Python bytecode caches
+__pycache__/
