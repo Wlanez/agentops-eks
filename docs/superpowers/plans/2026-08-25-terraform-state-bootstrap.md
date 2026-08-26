@@ -26,6 +26,19 @@
 - Stop on an unexpected profile, account, role, region, resource type, existing project-prefix bucket, multiple project-prefix buckets, authentication failure, or privacy-scan match.
 - Destructive bootstrap teardown is not part of implementation. It requires a separate approved procedure.
 
+## Shell execution contract
+
+All multi-command shell blocks in this plan target Bash. On macOS, where the interactive shell is commonly zsh, start a child Bash session from the repository root before running a task block:
+
+```bash
+bash
+set -euo pipefail
+```
+
+Run the complete block inside that Bash child. A failed `test` may close the child Bash when `set -e` is active, but it must not close the parent terminal. Do not paste fragments containing Bash-only array syntax into zsh. Keep one Bash child open while a task depends on exported values such as `STATE_BUCKET_NAME`; a variable exported inside `bash -c '...'` does not propagate back to the parent shell.
+
+Expected failures in RED test steps are intentional. Continue to the matching implementation step only when the failure reason is exactly the missing script or resource named by the plan.
+
 ## Files Created or Modified
 
 - Create: `.gitignore` — prevent Terraform runtime artifacts and local inputs from entering Git.
@@ -126,15 +139,16 @@ unset AWS_SECURITY_TOKEN
 
 This does not delete a credential file. It prevents environment credentials from silently taking precedence over IAM Identity Center.
 
-- [ ] **Step 4: Refresh the intended SSO session**
+- [ ] **Step 4: Refresh both SSO sessions used by the checkpoint**
 
 Run:
 
 ```bash
 aws sso login --profile agentops-lab-bootstrap
+aws sso login --profile agentops-org-admin
 ```
 
-Complete browser authentication as `jorge.nunez`.
+Complete browser authentication as `jorge.nunez`. Both profiles are required because the next step privately compares the lab and management accounts. If either session expires later, refresh both and rerun the preflight; never bypass an authentication failure.
 
 - [ ] **Step 5: Compare identities without printing IDs or ARNs**
 
@@ -252,6 +266,10 @@ terraform.rc
 
 # Local operating-system metadata
 .DS_Store
+
+# Python test/runtime caches
+__pycache__/
+*.py[cod]
 ```
 
 Do not ignore `.terraform.lock.hcl`. It contains provider selections and checksums, not credentials or state.
@@ -267,11 +285,12 @@ printf '%s\n' \
   'terraform/bootstrap/terraform.tfstate.backup' \
   'terraform/bootstrap/bootstrap.tfplan' \
   'terraform/bootstrap/private.auto.tfvars' \
-  'terraform/bootstrap/local.backend.hcl' |
+  'terraform/bootstrap/local.backend.hcl' \
+  'tests/terraform/__pycache__/test_verifier.pyc' |
   git check-ignore --no-index --stdin
 ```
 
-Expected: all six paths are printed because they are ignored.
+Expected: all seven paths are printed because they are ignored.
 
 - [ ] **Step 3: Verify the dependency lock file is not ignored**
 
@@ -1446,6 +1465,8 @@ Expected: six resources created.
 
 Stop on partial failure. Do not regenerate and auto-apply another plan.
 
+Terraform's apply progress can display the generated bucket name as a resource ID. Do not paste raw apply output into chat, issues, pull requests, or public evidence; record only the sanitized PASS/FAIL results from the verification steps.
+
 - [ ] **Step 3: Resolve the private bucket name without printing it**
 
 ```bash
@@ -1453,6 +1474,7 @@ STATE_BUCKET_NAME="$(
   terraform -chdir=terraform/bootstrap \
     output -raw state_bucket_name
 )"
+test -n "$STATE_BUCKET_NAME"
 export STATE_BUCKET_NAME
 
 case "$STATE_BUCKET_NAME" in
@@ -1460,21 +1482,26 @@ case "$STATE_BUCKET_NAME" in
   *) exit 1 ;;
 esac
 
-MATCHING_BUCKETS="$(
+MATCHING_BUCKET_COUNT="$(
   aws s3api list-buckets \
     --profile agentops-lab-bootstrap \
-    --query "Buckets[?starts_with(Name, 'agentops-eks-tfstate-')].Name" \
+    --query "length(Buckets[?starts_with(Name, 'agentops-eks-tfstate-')])" \
     --output text
 )"
+test "$MATCHING_BUCKET_COUNT" = "1"
 
-read -r -a MATCHING_BUCKET_ARRAY <<< "$MATCHING_BUCKETS"
-test "${#MATCHING_BUCKET_ARRAY[@]}" -eq 1
-test "${MATCHING_BUCKET_ARRAY[0]}" = "$STATE_BUCKET_NAME"
+MATCHING_BUCKET="$(
+  aws s3api list-buckets \
+    --profile agentops-lab-bootstrap \
+    --query "Buckets[?starts_with(Name, 'agentops-eks-tfstate-')].Name | [0]" \
+    --output text
+)"
+test "$MATCHING_BUCKET" = "$STATE_BUCKET_NAME"
 
 echo "state_bucket_resolution=PASS"
 echo "post_apply_bucket_inventory=PASS"
 
-unset MATCHING_BUCKETS MATCHING_BUCKET_ARRAY
+unset MATCHING_BUCKET MATCHING_BUCKET_COUNT
 ```
 
 Do not run `echo "$STATE_BUCKET_NAME"`. Stop if the active account owns zero or more than one bucket matching the prefix, or if the sole match differs from the Terraform output.
@@ -1703,6 +1730,14 @@ terraform -chdir=terraform/environments/dev validate
 ```bash
 scripts/aws-terraform-preflight.sh
 
+if [ -z "${STATE_BUCKET_NAME:-}" ]; then
+  STATE_BUCKET_NAME="$(
+    terraform -chdir=terraform/bootstrap output -raw state_bucket_name
+  )"
+  test -n "$STATE_BUCKET_NAME"
+  export STATE_BUCKET_NAME
+fi
+
 terraform -chdir=terraform/environments/dev init \
   -backend-config="bucket=$STATE_BUCKET_NAME"
 ```
@@ -1925,6 +1960,8 @@ unset DYNAMODB_MATCHES DYNAMODB_STATUS
 - [ ] **Step 4: Verify the actual bucket name is absent from Git**
 
 ```bash
+test -n "${STATE_BUCKET_NAME:-}"
+
 set +e
 BUCKET_GIT_MATCHES="$(git grep -F "$STATE_BUCKET_NAME")"
 BUCKET_GIT_STATUS=$?
@@ -2104,7 +2141,21 @@ git commit -m "docs: record Terraform state bootstrap evidence"
 - [ ] **Step 5: Run final read-only verification**
 
 ```bash
+aws sso login --profile agentops-lab-bootstrap
+aws sso login --profile agentops-org-admin
+
+export AWS_PROFILE=agentops-lab-bootstrap
+export AWS_REGION=us-west-2
+export AWS_DEFAULT_REGION=us-west-2
+
 scripts/aws-terraform-preflight.sh
+
+STATE_BUCKET_NAME="$(
+  terraform -chdir=terraform/bootstrap output -raw state_bucket_name
+)"
+test -n "$STATE_BUCKET_NAME"
+export STATE_BUCKET_NAME
+
 scripts/verify-state-bucket.sh
 terraform -chdir=terraform/bootstrap state pull >/dev/null
 terraform -chdir=terraform/environments/dev state pull >/dev/null
