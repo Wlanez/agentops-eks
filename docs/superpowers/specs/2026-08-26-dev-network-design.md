@@ -14,10 +14,9 @@ This workstream creates only the `dev` VPC network:
 
 - VPC, Internet Gateway, public and private subnets, route tables and associations;
 - one Elastic IP and one NAT Gateway;
-- one S3 Gateway VPC endpoint associated with private route tables; and
-- Terraform-managed security groups needed by the network boundary.
+- one S3 Gateway VPC endpoint associated with private route tables.
 
-It does not create EKS, EC2 nodes, ECR, load balancers, an ingress controller, VPC Interface endpoints, VPN/bastion access, or application resources.
+It does not create EKS, EC2 nodes, ECR, load balancers, an ingress controller, VPC Interface endpoints, VPN/bastion access, security groups, or application resources. The resulting Terraform graph contains exactly 19 managed AWS resources.
 
 ## Architecture
 
@@ -83,7 +82,11 @@ ECR API, ECR DKR, STS and EC2 Interface endpoints are deferred. They add per-hou
 
 Subnets carry the EKS discovery tags needed for future internal and public load-balancer placement. No load balancer is created in this workstream.
 
-There is no inbound SSH rule. The future EKS API endpoint will be public but restricted by a required `admin_cidr_blocks` variable. A fully private API endpoint is deferred because it would require an additional operator access path such as VPN, Direct Connect or a controlled bastion.
+There is no inbound SSH path because this workstream creates no compute, EKS endpoint, load balancer or Terraform-managed security group. Public subnets and an Internet Gateway do not independently expose a workload.
+
+No Terraform-managed security group is created in this workstream. A security group created now would not protect anything because no resource would be associated with it.
+
+The future EKS workstream will define and consume a required `admin_cidr_blocks` variable. It will enable private endpoint access for node-to-control-plane traffic and restrict the public endpoint to explicitly trusted operator CIDRs. A fully private operator-access model remains deferred until VPN, Direct Connect or a controlled in-VPC administration path exists.
 
 ## Terraform boundaries
 
@@ -93,7 +96,7 @@ The bootstrap root remains separate. Destroying `dev` must never include the sta
 
 ## Inputs, validation and tags
 
-Terraform exposes validated variables for VPC CIDR, selected-AZ count, `admin_cidr_blocks`, project, environment and common tags. The default selected-AZ count is two. Any future public EKS API configuration must reject an empty administrative CIDR list.
+Terraform exposes validated variables for AWS region, VPC CIDR, selected-AZ count, project and environment. The default selected-AZ count is two. This workstream does not request an administrative CIDR that it cannot enforce.
 
 Every resource receives the existing project, environment and Terraform ownership tags, plus EKS subnet discovery tags where applicable.
 
@@ -101,7 +104,7 @@ Every resource receives the existing project, environment and Terraform ownershi
 
 Before AWS apply, format, validate and test the module with a mocked provider. A saved plan is reviewed by an allowlist verifier that accepts only the approved network resource types and create actions.
 
-After apply, sanitized AWS readback verifies the VPC CIDR, two AZs, subnet public/private route separation, the single NAT route, S3 endpoint associations, tags and absence of SSH ingress. The verification output never prints account IDs, resource IDs, public IPs or private CIDR details beyond the approved design.
+After apply, sanitized AWS readback verifies the VPC CIDR, two AZs, subnet public/private route separation, the single NAT route, S3 endpoint associations and tags. The exact plan allowlist proves that this workstream creates no EKS, EC2, load balancer or Terraform-managed security-group resource. Verification output never prints account IDs, resource IDs, public IPs or private CIDR details beyond the approved design.
 
 ## Cost and destruction
 

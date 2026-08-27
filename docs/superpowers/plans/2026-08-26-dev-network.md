@@ -4,7 +4,7 @@
 
 **Goal:** Provision and verify a two-AZ, cost-aware private EKS network foundation in the existing `dev` Terraform root.
 
-**Architecture:** Direct AWS provider resources create a `10.20.0.0/16` VPC, two public `/20` subnets, two private `/19` subnets, one NAT Gateway, explicit route tables, an S3 Gateway endpoint, and a future EKS security group. The existing `dev` S3 backend remains the only state location; a create-only plan verifier and readback script prevent scope expansion and prove the real network before the next EKS workstream.
+**Architecture:** Direct AWS provider resources create exactly 19 managed AWS resources: a `10.20.0.0/16` VPC, two public `/20` subnets, two private `/19` subnets, one NAT Gateway, explicit route tables and an S3 Gateway endpoint. The existing `dev` S3 backend remains the only state location; a create-only plan verifier and readback script prevent scope expansion and prove the real network before the next EKS workstream.
 
 **Tech Stack:** Terraform `>= 1.10.0, < 2.0.0`, HashiCorp AWS Provider `~> 6.61.0`, AWS CLI v2 with IAM Identity Center, Bash, Python 3, Amazon VPC.
 
@@ -19,7 +19,7 @@
 - Create exactly one NAT Gateway and one Elastic IP in the first public subnet. Document it as a non-HA cost tradeoff.
 - Create only an S3 Gateway endpoint; do not create DynamoDB, ECR, STS, EC2, or other Interface endpoints.
 - Do not create EKS, EC2, ECR, load balancers, ingress, VPN, bastion, or application resources in this workstream.
-- No inbound SSH rule is permitted. The future EKS administrative CIDR variable must reject an empty list.
+- Do not create a security group or request an administrative CIDR in this workstream because no current resource can consume either control. The future EKS workstream must define and enforce its administrative CIDRs on the real cluster endpoint.
 - Do not print or commit account IDs, ARNs, resource IDs, EIPs, bucket names, state, plans, credentials, SSO URLs, or personal paths.
 - Every AWS change uses a saved reviewed plan. Stop after a failed preflight, plan contract, readback, or privacy scan.
 - `terraform destroy` is a separately approved, scoped lab teardown. It destroys only `dev` resources, never the bootstrap state bucket.
@@ -32,13 +32,13 @@
 |---|---|
 | `terraform/environments/dev/versions.tf` | Add the AWS provider dependency while retaining the Terraform version floor. |
 | `terraform/environments/dev/providers.tf` | Configure AWS region and common project/environment tags without credentials. |
-| `terraform/environments/dev/variables.tf` | Define and validate VPC, AZ, administrative CIDR, project and environment inputs. |
-| `terraform/environments/dev/network.tf` | Own the VPC, subnets, routes, NAT, S3 endpoint and security group. |
+| `terraform/environments/dev/variables.tf` | Define and validate AWS region, VPC, AZ, project and environment inputs. |
+| `terraform/environments/dev/network.tf` | Own the VPC, subnets, routes, NAT and S3 endpoint. |
 | `terraform/environments/dev/outputs.tf` | Retain the backend contract and add non-sensitive logical network outputs only. |
-| `terraform/environments/dev/test/network.tftest.hcl` | Mock-provider contract for topology and security invariants. |
+| `terraform/environments/dev/tests/network.tftest.hcl` | Mock-provider contract for topology and security invariants. |
 | `scripts/verify-dev-network-plan.py` | Reject plans that are not the exact approved create-only network graph. |
 | `tests/terraform/test_verify_dev_network_plan.py` | Unit-test plan-verifier acceptance and rejection paths. |
-| `scripts/verify-dev-network.sh` | Sanitize live AWS readback of topology, routing, tags and no-SSH invariant. |
+| `scripts/verify-dev-network.sh` | Sanitize live AWS readback of topology, routing, endpoint type and tags. |
 | `tests/terraform/test-verify-dev-network.sh` | Mock AWS CLI test for the live readback guard. |
 | `terraform/environments/dev/README.md` | Safe init, plan, apply, verification and teardown instructions. |
 | `docs/evidence/v0.1/dev-network.md` | Sanitized plan/apply/readback and cost-boundary evidence. |
@@ -50,23 +50,28 @@
 **Files:**
 - Create: `terraform/environments/dev/providers.tf`
 - Create: `terraform/environments/dev/variables.tf`
-- Create: `terraform/environments/dev/test/network.tftest.hcl`
+- Create: `terraform/environments/dev/tests/network.tftest.hcl`
 - Modify: `terraform/environments/dev/versions.tf`
 - Modify: `terraform/environments/dev/outputs.tf`
 
 **Interfaces:**
 - Consumes: existing `terraform_data.backend_contract`, `backend.tf`, and remote `dev` state.
-- Produces: validated variables `vpc_cidr`, `availability_zone_count`, `admin_cidr_blocks`, `project_name`, `environment`; provider default tags; tests that the later network resource names must satisfy.
+- Produces: validated variables `aws_region`, `vpc_cidr`, `availability_zone_count`, `project_name`, `environment`; provider default tags; tests that the later network resource names must satisfy.
 
 - [ ] **Step 1: Add a failing topology test before AWS resources exist**
 
-Create `terraform/environments/dev/test/network.tftest.hcl`:
+Create `terraform/environments/dev/tests/network.tftest.hcl`:
 
 ```hcl
-mock_provider "aws" {}
+mock_provider "aws" {
+  override_during = plan
 
-variables {
-  admin_cidr_blocks = ["203.0.113.0/24"]
+  override_data {
+    target = data.aws_availability_zones.available
+    values = {
+      names = ["us-west-2a", "us-west-2b"]
+    }
+  }
 }
 
 run "two_az_private_eks_network_contract" {
@@ -97,10 +102,6 @@ run "two_az_private_eks_network_contract" {
     error_message = "The only endpoint in this workstream must be the regional S3 Gateway endpoint."
   }
 
-  assert {
-    condition     = length(aws_security_group.eks_future.ingress) == 0
-    error_message = "The future EKS security group must not allow inbound SSH or other inbound traffic."
-  }
 }
 ```
 
@@ -113,17 +114,21 @@ terraform -chdir=terraform/environments/dev init -backend=false
 terraform -chdir=terraform/environments/dev test
 ```
 
-Expected: `backend_contract` passes and `network.tftest.hcl` fails with undeclared `aws_*` resource references.
+Expected: `backend_contract` passes and `network.tftest.hcl` fails with undeclared network data/resource references. The Availability Zone override becomes active when Task 2 declares its data source and prevents the mocked provider's default empty collection from breaking `slice`.
 
 - [ ] **Step 3: Add the provider constraint and provider configuration**
 
-Extend `versions.tf` without changing its Terraform constraint:
+Replace `versions.tf` with the complete Terraform settings block so `required_providers` is nested correctly:
 
 ```hcl
-required_providers {
-  aws = {
-    source  = "hashicorp/aws"
-    version = "~> 6.61.0"
+terraform {
+  required_version = ">= 1.10.0, < 2.0.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 6.61.0"
+    }
   }
 }
 ```
@@ -163,8 +168,15 @@ variable "aws_region" {
   }
 }
 
-variable "project_name" { type = string, default = "agentops-eks" }
-variable "environment" { type = string, default = "dev" }
+variable "project_name" {
+  type    = string
+  default = "agentops-eks"
+}
+
+variable "environment" {
+  type    = string
+  default = "dev"
+}
 
 variable "vpc_cidr" {
   type    = string
@@ -184,17 +196,9 @@ variable "availability_zone_count" {
   }
 }
 
-variable "admin_cidr_blocks" {
-  type      = set(string)
-  sensitive = true
-  validation {
-    condition     = length(var.admin_cidr_blocks) > 0 && alltrue([for cidr in var.admin_cidr_blocks : can(cidrhost(cidr, 0))])
-    error_message = "admin_cidr_blocks must contain at least one valid CIDR."
-  }
-}
 ```
 
-Leave `admin_cidr_blocks` without a default. It is not consumed by a network ingress rule yet; its validation establishes the required interface for the future restricted public EKS API.
+Do not define `admin_cidr_blocks` here. The future EKS workstream must introduce it together with `aws_eks_cluster`, set `endpoint_private_access = true`, and wire the variable to `public_access_cidrs`. This keeps the security control mandatory where it is enforceable rather than requiring an unused value now.
 
 Do not add a network output yet: it must not refer to data sources or resources that Task 2 has not created.
 
@@ -212,7 +216,7 @@ Expected: the provider and variable syntax is valid; the network test still fail
 - [ ] **Step 6: Commit the contract boundary**
 
 ```bash
-git add terraform/environments/dev/versions.tf terraform/environments/dev/providers.tf terraform/environments/dev/variables.tf terraform/environments/dev/outputs.tf terraform/environments/dev/test/network.tftest.hcl
+git add terraform/environments/dev/versions.tf terraform/environments/dev/providers.tf terraform/environments/dev/variables.tf terraform/environments/dev/outputs.tf terraform/environments/dev/tests/network.tftest.hcl
 git diff --cached --check
 git commit -m "test: define dev network contract"
 ```
@@ -221,11 +225,11 @@ git commit -m "test: define dev network contract"
 
 **Files:**
 - Create: `terraform/environments/dev/network.tf`
-- Modify: `terraform/environments/dev/test/network.tftest.hcl`
+- Modify: `terraform/environments/dev/tests/network.tftest.hcl`
 
 **Interfaces:**
 - Consumes: Task 1 variables and `local.common_tags`.
-- Produces: `aws_vpc.dev`, `aws_subnet.public`, `aws_subnet.private`, `aws_internet_gateway.dev`, `aws_nat_gateway.lab`, route tables, S3 endpoint and `aws_security_group.eks_future`.
+- Produces: `aws_vpc.dev`, `aws_subnet.public`, `aws_subnet.private`, `aws_internet_gateway.dev`, `aws_nat_gateway.lab`, route tables and the S3 endpoint.
 
 - [ ] **Step 1: Add a second failing test for explicit routing and subnet tags**
 
@@ -333,7 +337,7 @@ resource "aws_vpc_endpoint" "s3" {
 }
 ```
 
-Create `aws_security_group.eks_future` in the VPC with no `ingress` blocks and exactly one all-protocol egress block (`protocol = "-1"`, `cidr_blocks = ["0.0.0.0/0"]`). Do not add an SSH rule.
+Do not create a placeholder security group. Security groups must be created in the future EKS workstream and attached to real consumers so their rules are enforceable and testable.
 
 Append this non-sensitive output to `outputs.tf` once the referenced resources exist:
 
@@ -366,7 +370,7 @@ Expected: formatting, validation and both mock-provider tests pass. Fix only tes
 - [ ] **Step 5: Commit the network resources**
 
 ```bash
-git add terraform/environments/dev/network.tf terraform/environments/dev/test/network.tftest.hcl terraform/environments/dev/.terraform.lock.hcl
+git add terraform/environments/dev/network.tf terraform/environments/dev/tests/network.tftest.hcl terraform/environments/dev/.terraform.lock.hcl
 git diff --cached --check
 git commit -m "feat: add cost-aware dev network"
 ```
@@ -396,7 +400,6 @@ EXPECTED_COUNTS = {
     "aws_eip": 1,
     "aws_nat_gateway": 1,
     "aws_vpc_endpoint": 1,
-    "aws_security_group": 1,
 }
 ```
 
@@ -444,13 +447,13 @@ git commit -m "test: verify dev network plan"
 
 **Interfaces:**
 - Consumes: `AWS_PROFILE=agentops-lab-bootstrap`, region selectors and Terraform state; the script resolves resource IDs internally and emits only a PASS/FAIL line.
-- Produces: `dev_network_readback=PASS` only when the live network matches the approved topology.
+- Produces: `dev_network_readback=PASS` only when the live network matches the approved topology. Resource-scope exclusions remain the responsibility of the exact Terraform plan allowlist.
 
 - [ ] **Step 1: Write mock AWS CLI tests for readback failures**
 
-Create a Bash test modeled on `test-verify-state-bucket.sh`. The fake `aws` command must return sanitized fixtures for `ec2 describe-vpcs`, `describe-subnets`, `describe-route-tables`, `describe-nat-gateways`, `describe-vpc-endpoints`, and `describe-security-groups`.
+Create a Bash test modeled on `test-verify-state-bucket.sh`. The fake `aws` command must return sanitized fixtures for `ec2 describe-vpcs`, `describe-subnets`, `describe-route-tables`, `describe-nat-gateways`, and `describe-vpc-endpoints`.
 
-Assert one passing topology and failure cases for: VPC CIDR mismatch, fewer than two AZs, public IP mapping in a private subnet, multiple NAT gateways, missing S3 endpoint association, and a security-group ingress rule with TCP port 22. The test must assert only the `dev_network_readback=PASS` or `FAIL_<reason>` output, never fixture identifiers.
+Assert one passing topology and failure cases for: VPC CIDR mismatch, fewer than two AZs, public IP mapping in a private subnet, multiple NAT gateways, missing S3 endpoint association, and an unexpected non-Gateway endpoint. The test must assert only the `dev_network_readback=PASS` or `FAIL_<reason>` output, never fixture identifiers.
 
 - [ ] **Step 2: Run the test to verify it fails because the script does not exist**
 
@@ -472,7 +475,7 @@ Create `scripts/verify-dev-network.sh` with `#!/usr/bin/env bash` and `set -euo 
 4. require exactly four subnets across two AZs, with exactly two public and two private classifications based on their route tables and `MapPublicIpOnLaunch` values;
 5. require one available NAT gateway, one EIP association, and private default routes pointing to it;
 6. require one `Gateway` S3 endpoint associated with both private route tables;
-7. require future EKS subnet tags, common tags and no ingress rule on TCP 22;
+7. require future EKS subnet tags and common tags;
 8. print only `dev_network_readback=PASS` on success and `dev_network_readback=FAIL_<reason>` on stderr otherwise.
 
 Do not put AWS IDs, EIPs, CIDRs returned by AWS, or full policy documents in output.
@@ -616,6 +619,6 @@ git commit -m "docs: record dev network evidence"
 - [ ] Python and Bash verifier tests pass.
 - [ ] The real plan verifier reports `dev_network_plan_contract=PASS` before each apply.
 - [ ] The real readback reports `dev_network_readback=PASS` after apply.
-- [ ] No SSH ingress, Interface endpoints, EKS, EC2, ECR, load balancers or DynamoDB exist in the plan.
+- [ ] No security-group, Interface endpoint, EKS, EC2, ECR, load-balancer or DynamoDB resource exists in the plan.
 - [ ] Repository privacy and runtime-artifact scans pass.
 - [ ] Any teardown is explicitly approved, applies only the reviewed `dev` destroy plan, and leaves bootstrap state intact.
