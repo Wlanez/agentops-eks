@@ -1,3 +1,15 @@
+mock_provider "aws" {
+  override_during = plan
+
+  override_data {
+    target = data.aws_availability_zones.available
+
+    values = {
+      names = ["us-west-2a", "us-west-2b"]
+    }
+  }
+}
+
 run "backend_contract" {
   command = plan
 
