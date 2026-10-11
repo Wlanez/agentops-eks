@@ -80,6 +80,15 @@ agentops-eks/
 
 Folders are added as the corresponding milestone is implemented. Versions are preserved with Git tags/releases rather than duplicated version folders.
 
+## Taller guiado de Terraform + AWS (actualizado 2026-10-11)
+
+- [Comenzar el taller y ver la ruta completa](docs/workshop/README.md)
+- [Estado verificado y siguiente sesión](docs/workshop/progress.md)
+- [Lección 1: Terraform state, backend y drift](docs/workshop/01-terraform-state.md)
+- [Lección 2: VPC, subnets, routing y NAT](docs/workshop/02-vpc-networking.md)
+
+**Estado importante:** el bootstrap de la cuenta AWS consta como completado en la evidencia. La implementación de Terraform state y networking está en [PR #3](https://github.com/Wlanez/agentops-eks/pull/3), todavía en borrador y sin mergear a main. El backend contiene evidencia de verificaciones reales, pero la VPC solo tiene tests locales reportados; no ejecutar apply hasta completar las guardas del PR. Este repositorio distingue explícitamente diseño, tests, cambios reales y Definition of Done.
+
 ## Current target
 
 **v0.1 Foundation** — provision the AWS/EKS foundation, containerize a small FastAPI workload, deploy it with Helm, and automate build/deploy with GitHub Actions.
