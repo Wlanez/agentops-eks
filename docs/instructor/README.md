@@ -106,6 +106,15 @@ Prefer this sequence:
 
 The code should support the explanation; the video should not become a narrated file-by-file walkthrough.
 
+## Terraform + AWS workshop: start here
+
+- [Learning route, mental models and assessment](../workshop/README.md)
+- [Verified progress and next checkpoint](../workshop/progress.md)
+- [State/locking/drift: explain, predict, test](../workshop/01-terraform-state.md)
+- [VPC/routing/NAT: explain, predict, test](../workshop/02-vpc-networking.md)
+
+Teaching must separate **what was designed**, **what passed local tests**, **what was verified in AWS**, and **what is merged**. Never teach successful local mock tests as proof that an AWS workload is deployed. For each lesson, capture a simple-English interview explanation and a security/cost tradeoff.
+
 ## Current teaching guides
 
 - [AI Platform from First Principles](first-principles.md)
