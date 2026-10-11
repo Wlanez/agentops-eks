@@ -24,6 +24,12 @@ See [docs/instructor/first-principles.md](docs/instructor/first-principles.md).
 
 ---
 
+## Workshop execution status (2026-10-11)
+
+The roadmap describes **target capabilities**, not completed infrastructure. Check [workshop progress](docs/workshop/progress.md) for the verified state and [guided Terraform/AWS lessons](docs/workshop/README.md) before attempting AWS changes. The AWS account bootstrap is documented as complete. Remote Terraform state and VPC implementation are staged in [draft PR #3](https://github.com/Wlanez/agentops-eks/pull/3); the VPC has not been applied to AWS according to the PR. Keep the draft safety gates intact until plan verification, tests and sanitized AWS readback are ready. **Do not skip Terraform and AWS fundamentals when AI tools can generate the code.**
+
+---
+
 ## v0.1 — Foundation
 
 **Goal:** create a reproducible AWS/EKS platform and deploy a small application through CI/CD.
