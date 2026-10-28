@@ -387,9 +387,21 @@ git commit -m "feat: add cost-aware dev network"
 
 - [ ] **Step 1: Write failing verifier tests**
 
-Create a Python `unittest` file patterned after `test_verify_bootstrap_plan.py`. Its `EXPECTED_COUNTS` must be:
+Create `tests/terraform/test_verify_dev_network_plan.py`. Do not place this test under `terraform/bootstrap/tests/`; the verifier is a repository-level script and its test belongs beside `test_verify_bootstrap_plan.py`.
+
+The test must contain the following complete structure:
 
 ```python
+import json
+import subprocess
+import sys
+import unittest
+from pathlib import Path
+
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+SCRIPT = REPO_ROOT / "scripts" / "verify-dev-network-plan.py"
+
 EXPECTED_COUNTS = {
     "aws_vpc": 1,
     "aws_internet_gateway": 1,
@@ -401,11 +413,76 @@ EXPECTED_COUNTS = {
     "aws_nat_gateway": 1,
     "aws_vpc_endpoint": 1,
 }
+
+
+def plan(resource_types, actions=None):
+    selected_actions = actions or ["create"]
+    return {
+        "resource_changes": [
+            {
+                "address": f"{resource_type}.test",
+                "mode": "managed",
+                "type": resource_type,
+                "change": {"actions": selected_actions},
+            }
+            for resource_type in resource_types
+        ]
+    }
+
+
+def expected_resource_types():
+    return [
+        resource_type
+        for resource_type, count in EXPECTED_COUNTS.items()
+        for _ in range(count)
+    ]
+
+
+def run_verifier(payload):
+    return subprocess.run(
+        [sys.executable, str(SCRIPT)],
+        input=json.dumps(payload),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+
+class DevNetworkPlanVerifierTest(unittest.TestCase):
+    def test_accepts_exact_create_only_contract(self):
+        result = run_verifier(plan(expected_resource_types()))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            result.stdout.strip(),
+            "dev_network_plan_contract=PASS",
+        )
+
+    def test_rejects_added_eks_cluster(self):
+        result = run_verifier(
+            plan(expected_resource_types() + ["aws_eks_cluster"])
+        )
+        self.assertNotEqual(result.returncode, 0)
+
+    def test_rejects_delete_action(self):
+        result = run_verifier(
+            plan(expected_resource_types(), actions=["delete"])
+        )
+        self.assertNotEqual(result.returncode, 0)
+
+    def test_rejects_missing_private_route_association(self):
+        resource_types = expected_resource_types()
+        resource_types.remove("aws_route_table_association")
+        result = run_verifier(plan(resource_types))
+        self.assertNotEqual(result.returncode, 0)
+
+
+if __name__ == "__main__":
+    unittest.main()
 ```
 
-Test four behaviours: accepts the exact type counts with `['create']`; rejects an added `aws_eks_cluster`; rejects any `['delete']`; rejects a missing private-route association. The test invokes `scripts/verify-dev-network-plan.py` with JSON on stdin and expects the exact pass line.
+The four tests must cover: acceptance of exactly 19 managed resources with `['create']`; rejection of an added `aws_eks_cluster`; rejection of any `['delete']` action; and rejection when one `aws_route_table_association` is missing. The test invokes the separate CLI script with JSON on standard input and checks the exact success line. The test file must contain only the test harness; it must never be used as the production verifier.
 
-- [ ] **Step 2: Run the test and verify it fails because the script does not exist**
+- [ ] **Step 2: Run the test and verify it fails because the verifier behavior is not implemented**
 
 Run:
 
@@ -413,11 +490,69 @@ Run:
 python3 -m unittest tests/terraform/test_verify_dev_network_plan.py -v
 ```
 
-Expected: the acceptance test fails with a missing verifier file.
+Expected: the acceptance test fails until `scripts/verify-dev-network-plan.py` reads and validates the JSON input.
 
 - [ ] **Step 3: Implement the verifier with `collections.Counter`**
 
-Create `scripts/verify-dev-network-plan.py`. It must parse JSON, skip non-managed and `['no-op']` changes, fail on non-create actions, count resource types with `Counter`, compare exactly to `EXPECTED_COUNTS`, and print only `dev_network_plan_contract=PASS` on success. Invalid JSON, an unexpected type/count, and any non-create action must print `dev_network_plan_contract=FAIL_<reason>` to stderr and exit one.
+Create `scripts/verify-dev-network-plan.py` with this exact behavior:
+
+```python
+#!/usr/bin/env python3
+
+from collections import Counter
+import json
+import sys
+
+
+EXPECTED_COUNTS = {
+    "aws_vpc": 1,
+    "aws_internet_gateway": 1,
+    "aws_subnet": 4,
+    "aws_route_table": 3,
+    "aws_route": 3,
+    "aws_route_table_association": 4,
+    "aws_eip": 1,
+    "aws_nat_gateway": 1,
+    "aws_vpc_endpoint": 1,
+}
+
+
+def fail(reason):
+    print(f"dev_network_plan_contract=FAIL_{reason}", file=sys.stderr)
+    raise SystemExit(1)
+
+
+try:
+    plan = json.load(sys.stdin)
+except (json.JSONDecodeError, UnicodeDecodeError):
+    fail("INVALID_JSON")
+
+if not isinstance(plan, dict):
+    fail("INVALID_PLAN")
+
+resource_types = []
+
+for item in plan.get("resource_changes", []):
+    if item.get("mode") != "managed":
+        continue
+
+    actions = item.get("change", {}).get("actions", [])
+
+    if actions == ["no-op"]:
+        continue
+
+    if actions != ["create"]:
+        fail("NON_CREATE_ACTION")
+
+    resource_types.append(item.get("type"))
+
+if Counter(resource_types) != Counter(EXPECTED_COUNTS):
+    fail("UNEXPECTED_RESOURCE_GRAPH")
+
+print("dev_network_plan_contract=PASS")
+```
+
+The script must skip non-managed changes and `['no-op']` changes, reject every other action list unless it is exactly `['create']`, compare the complete resource-type counter including counts, and write failure output to stderr before exiting with status 1. It must write no success text other than `dev_network_plan_contract=PASS`. Keep all `unittest` code in `tests/terraform/test_verify_dev_network_plan.py`; the CLI must not invoke its own tests or spawn itself.
 
 - [ ] **Step 4: Run verifier tests and static checks**
 
